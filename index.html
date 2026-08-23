@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream Starting Soon</title>
+<meta name="description" content="A reusable countdown overlay for livestreams. Configure with URL params or the built-in panel.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127769;</text></svg>">
+<style>
+  :root{
+    --accent:#7cf2ff;
+    --ink:#eaf6ff;
+    --bg:#04060f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:ui-sans-serif,"Inter","Helvetica Neue",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    overflow:hidden;-webkit-font-smoothing:antialiased;
+  }
+  body.transparent{background:transparent}
+
+  /* ---------------- background ---------------- */
+  #bg{position:fixed;inset:0;overflow:hidden;z-index:0}
+  #bg iframe{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:100vw;height:56.25vw;min-height:100vh;min-width:177.78vh;
+    border:0;pointer-events:none;
+  }
+  #stars{position:fixed;inset:0;z-index:1;pointer-events:none}
+  #scrim{
+    position:fixed;inset:0;z-index:2;pointer-events:none;
+    background:
+      radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.30) 0%, rgba(4,6,15,.70) 46%, rgba(4,6,15,.93) 100%),
+      linear-gradient(180deg, rgba(4,6,15,.70) 0%, rgba(4,6,15,0) 26%, rgba(4,6,15,0) 68%, rgba(4,6,15,.88) 100%);
+  }
+  body.transparent #bg,body.transparent #scrim,body.transparent #stars{display:none}
+
+  /* ---------------- content ---------------- */
+  main{
+    position:relative;z-index:3;height:100%;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:clamp(12px,2.2vh,28px);text-align:center;padding:5vh 4vw;
+  }
+  .badge{
+    display:inline-flex;align-items:center;gap:.65em;
+    font-size:clamp(10px,1.05vw,14px);letter-spacing:.4em;text-transform:uppercase;
+    padding:.6em 1.2em .6em 1em;border-radius:999px;
+    border:1px solid color-mix(in srgb,var(--accent) 34%,transparent);
+    background:color-mix(in srgb,var(--accent) 7%,transparent);
+    backdrop-filter:blur(8px);color:color-mix(in srgb,var(--accent) 65%,#fff);
+  }
+  .dot{width:.55em;height:.55em;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 12px var(--accent);animation:blink 1.8s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.22}}
+
+  #showName{
+    font-size:clamp(12px,1.5vw,19px);letter-spacing:.5em;text-transform:uppercase;
+    color:rgba(234,246,255,.60);
+  }
+  h1{
+    font-size:clamp(30px,6.4vw,96px);font-weight:800;letter-spacing:.02em;line-height:1.02;
+    text-transform:uppercase;
+    background:linear-gradient(180deg,#fff 0%,#d6ecff 45%,color-mix(in srgb,var(--accent) 70%,#4a7fff) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:breathe 5.5s ease-in-out infinite;
+  }
+  @keyframes breathe{
+    0%,100%{filter:drop-shadow(0 0 20px color-mix(in srgb,var(--accent) 22%,transparent))}
+    50%{filter:drop-shadow(0 0 42px color-mix(in srgb,var(--accent) 45%,transparent))}
+  }
+
+  /* ---------------- clock ---------------- */
+  .clock{display:flex;align-items:flex-start;gap:clamp(6px,1.2vw,20px);margin-top:.35em}
+  .unit{display:flex;flex-direction:column;align-items:center;gap:.6em}
+  .unit.hide{display:none}
+  .digits{display:flex;gap:clamp(4px,.5vw,9px)}
+  .cell{
+    min-width:clamp(42px,7vw,102px);
+    padding:clamp(9px,1.6vh,22px) clamp(6px,.9vw,14px);
+    border-radius:clamp(10px,1.1vw,18px);
+    background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.02));
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 18px 45px rgba(0,0,0,.5);
+    backdrop-filter:blur(14px);
+    font-size:clamp(32px,6.8vw,100px);font-weight:700;line-height:1;
+    font-variant-numeric:tabular-nums;
+    text-shadow:0 0 26px color-mix(in srgb,var(--accent) 40%,transparent);
+  }
+  .cell.tick{animation:pop .45s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes pop{0%{transform:translateY(-6px) scale(1.06);color:#fff}100%{transform:none}}
+  .label{font-size:clamp(9px,.9vw,12px);letter-spacing:.32em;text-transform:uppercase;
+    color:rgba(234,246,255,.5)}
+  .sep{font-size:clamp(26px,4.6vw,70px);font-weight:600;opacity:.3;
+    padding-top:clamp(9px,1.6vh,22px);animation:blink 2s ease-in-out infinite}
+  .sep.hide{display:none}
+
+  #startsAt{font-size:clamp(11px,1.25vw,17px);letter-spacing:.16em;
+    color:rgba(234,246,255,.5);text-transform:uppercase}
+  #startsAt b{color:var(--accent);font-weight:600}
+  #sub{font-size:clamp(11px,1.2vw,16px);letter-spacing:.14em;color:rgba(234,246,255,.42)}
+  #sub:empty{display:none}
+
+  /* live state */
+  body.live h1{background:linear-gradient(180deg,#fff,#ffdada 50%,#ff5f5f);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  body.live .badge{border-color:rgba(255,80,80,.5);background:rgba(255,80,80,.10);color:#ffd6d6}
+  body.live .dot{background:#ff5252;box-shadow:0 0 14px #ff5252}
+  body.live .clock,body.live #startsAt{display:none}
+
+  /* ---------------- settings ---------------- */
+  #gear{
+    position:fixed;top:14px;right:14px;z-index:6;width:38px;height:38px;border-radius:11px;
+    display:grid;place-items:center;cursor:pointer;font-size:16px;
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+    color:rgba(234,246,255,.7);opacity:0;transition:opacity .25s ease;backdrop-filter:blur(10px);
+  }
+  body:hover #gear,#gear:focus-visible{opacity:1}
+  body.panel-open #gear{opacity:1}
+  #panel{
+    position:fixed;top:0;right:0;bottom:0;width:min(370px,92vw);z-index:7;
+    background:rgba(8,11,22,.94);backdrop-filter:blur(20px);
+    border-left:1px solid rgba(255,255,255,.10);
+    padding:22px 22px 30px;overflow-y:auto;
+    transform:translateX(101%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+    font-size:13px;
+  }
+  body.panel-open #panel{transform:none}
+  #panel h2{font-size:12px;letter-spacing:.28em;text-transform:uppercase;
+    color:rgba(234,246,255,.45);margin-bottom:18px;font-weight:600}
+  .field{margin-bottom:13px}
+  .field label{display:block;font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+    color:rgba(234,246,255,.45);margin-bottom:5px}
+  .field input[type=text],.field input[type=time],.field input[type=date]{
+    width:100%;padding:9px 11px;border-radius:9px;font:inherit;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.13);
+    color:var(--ink);outline:none;
+  }
+  .field input:focus{border-color:var(--accent)}
+  .field input[type=color]{width:100%;height:36px;padding:2px;border-radius:9px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.13);cursor:pointer}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1}
+  .check{display:flex;align-items:center;gap:9px;margin-bottom:11px;
+    color:rgba(234,246,255,.75);cursor:pointer}
+  .check input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+  .btn{
+    width:100%;padding:11px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;
+    background:var(--accent);color:#04060f;border:0;letter-spacing:.06em;margin-top:6px;
+  }
+  .btn.ghost{background:rgba(255,255,255,.06);color:var(--ink);
+    border:1px solid rgba(255,255,255,.14);font-weight:500}
+  #urlOut{
+    margin-top:12px;padding:9px 11px;border-radius:9px;font-size:11px;line-height:1.5;
+    background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.09);
+    color:rgba(234,246,255,.55);word-break:break-all;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  .note{margin-top:16px;font-size:11px;line-height:1.6;color:rgba(234,246,255,.35)}
+  .note code{color:rgba(234,246,255,.6);font-size:10.5px}
+
+  #hint{position:fixed;left:50%;bottom:15px;transform:translateX(-50%);z-index:4;
+    font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+    color:rgba(234,246,255,.25);transition:opacity .6s ease}
+  #hint.hide{opacity:0}
+  body.transparent #hint,body.transparent #gear{display:none}
+  @media (max-width:640px){.clock{gap:4px}.sep{display:none}}
+</style>
+</head>
+<body>
+
+<div id="bg"></div>
+<canvas id="stars"></canvas>
+<div id="scrim"></div>
+
+<main>
+  <div class="badge"><span class="dot"></span><span id="badgeText">Live soon</span></div>
+  <div id="showName"></div>
+  <h1 id="headline"></h1>
+
+  <div class="clock" id="clock">
+    <div class="unit" id="uDD"><div class="digits" id="dd"></div><div class="label">Days</div></div>
+    <div class="sep" id="sepD">:</div>
+    <div class="unit"><div class="digits" id="hh"></div><div class="label">Hours</div></div>
+    <div class="sep">:</div>
+    <div class="unit"><div class="digits" id="mm"></div><div class="label">Minutes</div></div>
+    <div class="sep">:</div>
+    <div class="unit"><div class="digits" id="ss"></div><div class="label">Seconds</div></div>
+  </div>
+
+  <div id="startsAt"></div>
+  <div id="sub"></div>
+</main>
+
+<button id="gear" title="Settings (S)" aria-label="Settings">&#9881;</button>
+
+<aside id="panel">
+  <h2>Countdown Setup</h2>
+
+  <div class="field"><label>Show name</label><input type="text" id="f_show" placeholder="Moon Boys Podcast"></div>
+  <div class="field"><label>Headline</label><input type="text" id="f_headline" placeholder="Stream Starting Soon"></div>
+  <div class="field"><label>Subtitle (optional)</label><input type="text" id="f_sub" placeholder="Episode 42"></div>
+
+  <div class="row">
+    <div class="field"><label>Date</label><input type="date" id="f_date"></div>
+    <div class="field"><label>Start time</label><input type="time" id="f_time"></div>
+  </div>
+
+  <div class="field">
+    <label>YouTube background (URL or ID)</label>
+    <input type="text" id="f_video" placeholder="https://youtube.com/watch?v=...">
+  </div>
+
+  <div class="field"><label>Accent colour</label><input type="color" id="f_color" value="#7cf2ff"></div>
+
+  <label class="check"><input type="checkbox" id="f_transparent"> Transparent (OBS overlay mode)</label>
+  <label class="check"><input type="checkbox" id="f_nostars"> Hide starfield</label>
+
+  <button class="btn" id="apply">Apply</button>
+  <button class="btn ghost" id="copy">Copy shareable link</button>
+  <div id="urlOut"></div>
+
+  <div class="note">
+    Everything lives in the URL &mdash; bookmark it or paste it straight into an
+    OBS <b>Browser Source</b> (1920&times;1080). Params:
+    <code>?show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;v=videoId&amp;c=hexcolor&amp;transparent=1&amp;nostars=1</code>.
+    Time is read in each viewer's own timezone unless you add <code>&amp;tz=-5</code> (UTC offset in hours).
+    Keys: <b>S</b> settings, <b>F</b> fullscreen, <b>H</b> hide hint.
+  </div>
+</aside>
+
+<div id="hint">S for settings &middot; F for fullscreen</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------------- defaults ---------------- */
+var DEFAULTS = {
+  show: 'Moon Boys Podcast',
+  headline: 'Stream Starting Soon',
+  sub: '',
+  t: '12:30',
+  d: '',                    // blank = today (rolls forward if long past)
+  v: 'TfWotiyXGfI',
+  c: '#7cf2ff',
+  tz: '',                   // '' = each viewer's local time; e.g. '-5' = fixed UTC-5
+  transparent: false,
+  nostars: false
+};
+
+var q = new URLSearchParams(location.search);
+var C = {};
+Object.keys(DEFAULTS).forEach(function(k){
+  var v = q.get(k);
+  if (typeof DEFAULTS[k] === 'boolean') {
+    C[k] = (v === '1' || v === 'true') ? true : (v === '0' ? false : DEFAULTS[k]);
+  } else {
+    C[k] = (v === null || v === '') ? DEFAULTS[k] : v;
+  }
+});
+if (q.get('overlay') === '1') C.transparent = true;
+
+/* ---------------- helpers ---------------- */
+function $(id){ return document.getElementById(id); }
+
+function videoId(s){
+  if (!s) return '';
+  s = s.trim();
+  var m = s.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/|\/shorts\/)([A-Za-z0-9_\-]{6,})/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_\-]{6,}$/.test(s) ? s : '';
+}
+
+function computeTarget(){
+  var p = String(C.t).split(':');
+  var h = parseInt(p[0], 10) || 0;
+  var mi = parseInt(p[1], 10) || 0;
+  var d;
+  if (C.tz !== '' && !isNaN(parseFloat(C.tz))) {
+    // fixed UTC offset: identical countdown for every viewer, wherever they are
+    var off = parseFloat(C.tz);
+    var base;
+    if (C.d) {
+      base = C.d.split('-').map(Number);
+    } else {
+      var n = new Date(Date.now() + off * 3600e3);
+      base = [n.getUTCFullYear(), n.getUTCMonth() + 1, n.getUTCDate()];
+    }
+    d = new Date(Date.UTC(base[0], base[1] - 1, base[2], h - off, mi, 0, 0));
+    if (!C.d && Date.now() - d.getTime() > 3 * 3600e3) d = new Date(d.getTime() + 864e5);
+  } else if (C.d) {
+    var b = C.d.split('-').map(Number);
+    d = new Date(b[0], b[1] - 1, b[2], h, mi, 0, 0);
+  } else {
+    d = new Date();
+    d.setHours(h, mi, 0, 0);
+    if (Date.now() - d.getTime() > 3 * 3600e3) d.setDate(d.getDate() + 1);
+  }
+  return d;
+}
+var TARGET = computeTarget();
+
+/* ---------------- page chrome ---------------- */
+document.documentElement.style.setProperty('--accent', C.c);
+$('showName').textContent = C.show;
+$('headline').textContent = C.headline;
+$('sub').textContent = C.sub;
+document.title = (C.show ? C.show + ' — ' : '') + C.headline;
+if (C.transparent) document.body.classList.add('transparent');
+
+var tzLabel = (C.tz !== '' && !isNaN(parseFloat(C.tz)))
+  ? ' (UTC' + (parseFloat(C.tz) >= 0 ? '+' : '') + C.tz + ')' : '';
+$('startsAt').innerHTML =
+  'Starts <b>' + TARGET.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) + '</b>' +
+  tzLabel + ' · ' + TARGET.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+
+/* ---------------- background video ---------------- */
+var vid = videoId(C.v);
+if (!C.transparent && vid) {
+  var params = new URLSearchParams({
+    autoplay:'1', mute:'1', controls:'0', loop:'1', playlist:vid,
+    modestbranding:'1', playsinline:'1', rel:'0', iv_load_policy:'3', disablekb:'1', fs:'0'
+  });
+  var frame = document.createElement('iframe');
+  frame.src = 'https://www.youtube-nocookie.com/embed/' + vid + '?' + params.toString();
+  frame.allow = 'autoplay; encrypted-media';
+  frame.setAttribute('frameborder', '0');
+  frame.setAttribute('title', 'background video');
+  $('bg').appendChild(frame);
+}
+
+/* ---------------- countdown ---------------- */
+var prev = {};
+function pad(n){ return String(n).padStart(2, '0'); }
+
+function paint(id, str){
+  if (prev[id] === str) return;
+  var changed = prev[id] !== undefined;
+  prev[id] = str;
+  var el = $(id);
+  el.innerHTML = '';
+  for (var i = 0; i < str.length; i++) {
+    var cell = document.createElement('div');
+    cell.className = 'cell' + (changed ? ' tick' : '');
+    cell.textContent = str[i];
+    el.appendChild(cell);
+  }
+}
+
+function tick(){
+  var ms = TARGET - Date.now();
+  if (ms <= 0) {
+    document.body.classList.add('live');
+    $('badgeText').textContent = 'Live now';
+    $('headline').textContent = "We're Live";
+    document.title = (C.show ? C.show + ' — ' : '') + "We're Live";
+    return;
+  }
+  var s = Math.floor(ms / 1000);
+  var days = Math.floor(s / 86400);
+  if (days > 0) {
+    $('uDD').classList.remove('hide');
+    $('sepD').classList.remove('hide');
+    paint('dd', pad(days));
+    paint('hh', pad(Math.floor(s / 3600) % 24));
+  } else {
+    $('uDD').classList.add('hide');
+    $('sepD').classList.add('hide');
+    paint('hh', pad(Math.floor(s / 3600)));
+  }
+  paint('mm', pad(Math.floor(s / 60) % 60));
+  paint('ss', pad(s % 60));
+}
+$('uDD').classList.add('hide');
+$('sepD').classList.add('hide');
+tick();
+setInterval(tick, 250);
+
+/* ---------------- starfield ---------------- */
+if (!C.transparent && !C.nostars) (function(){
+  var cv = $('stars'), ctx = cv.getContext('2d'), stars = [], W = 0, H = 0;
+  function resize(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.width = innerWidth * dpr;
+    H = cv.height = innerHeight * dpr;
+    cv.style.width = innerWidth + 'px';
+    cv.style.height = innerHeight + 'px';
+    var n = Math.min(420, Math.round(innerWidth * innerHeight / 9000));
+    stars = [];
+    for (var i = 0; i < n; i++) {
+      stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: (Math.random() * 1.4 + 0.25) * dpr,
+        a: Math.random() * 6.28,
+        sp: Math.random() * 0.012 + 0.003,
+        dx: (Math.random() - 0.5) * 0.05 * dpr
+      });
+    }
+  }
+  function loop(){
+    ctx.clearRect(0, 0, W, H);
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      s.a += s.sp;
+      s.x += s.dx;
+      if (s.x < 0) s.x = W; else if (s.x > W) s.x = 0;
+      var o = 0.26 + Math.abs(Math.sin(s.a)) * 0.6;
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(200,232,255,' + o.toFixed(3) + ')';
+      ctx.arc(s.x, s.y, s.r, 0, 6.2832);
+      ctx.fill();
+    }
+    requestAnimationFrame(loop);
+  }
+  addEventListener('resize', resize);
+  resize();
+  loop();
+})();
+
+/* ---------------- settings panel ---------------- */
+$('f_show').value = C.show;
+$('f_headline').value = C.headline;
+$('f_sub').value = C.sub;
+$('f_time').value = C.t;
+$('f_date').value = C.d ||
+  (TARGET.getFullYear() + '-' + pad(TARGET.getMonth() + 1) + '-' + pad(TARGET.getDate()));
+$('f_video').value = C.v;
+$('f_color').value = /^#[0-9a-f]{6}$/i.test(C.c) ? C.c : '#7cf2ff';
+$('f_transparent').checked = C.transparent;
+$('f_nostars').checked = C.nostars;
+
+function buildURL(){
+  var u = new URLSearchParams();
+  function set(k, v, def){ if (v !== '' && v !== def) u.set(k, v); }
+  set('show', $('f_show').value.trim(), DEFAULTS.show);
+  set('headline', $('f_headline').value.trim(), DEFAULTS.headline);
+  set('sub', $('f_sub').value.trim(), DEFAULTS.sub);
+  set('d', $('f_date').value, DEFAULTS.d);
+  set('t', $('f_time').value, DEFAULTS.t);
+  set('v', videoId($('f_video').value) || $('f_video').value.trim(), DEFAULTS.v);
+  set('c', $('f_color').value, DEFAULTS.c);
+  if (C.tz !== '') u.set('tz', C.tz);
+  if ($('f_transparent').checked) u.set('transparent', '1');
+  if ($('f_nostars').checked) u.set('nostars', '1');
+  var s = u.toString();
+  return location.origin + location.pathname + (s ? '?' + s : '');
+}
+function refreshURL(){ $('urlOut').textContent = buildURL(); }
+
+Array.prototype.forEach.call(document.querySelectorAll('#panel input'), function(el){
+  el.addEventListener('input', refreshURL);
+});
+refreshURL();
+
+$('apply').addEventListener('click', function(){ location.href = buildURL(); });
+
+$('copy').addEventListener('click', function(){
+  var btn = this, url = buildURL();
+  var done = function(txt){
+    btn.textContent = txt;
+    setTimeout(function(){ btn.textContent = 'Copy shareable link'; }, 1600);
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url)
+      .then(function(){ done('Copied'); })
+      .catch(function(){ done('Select the link below'); });
+  } else {
+    done('Select the link below');
+  }
+});
+
+function togglePanel(){ document.body.classList.toggle('panel-open'); }
+$('gear').addEventListener('click', togglePanel);
+
+/* ---------------- keyboard ---------------- */
+addEventListener('keydown', function(e){
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) {
+    if (e.key === 'Escape') document.activeElement.blur();
+    return;
+  }
+  var k = e.key.toLowerCase();
+  if (k === 's') togglePanel();
+  else if (k === 'h') $('hint').classList.toggle('hide');
+  else if (k === 'escape') document.body.classList.remove('panel-open');
+  else if (k === 'f') {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  }
+});
+setTimeout(function(){ $('hint').classList.add('hide'); }, 8000);
+
+})();
+</script>
+</body>
+</html>
