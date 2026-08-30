@@ -49,8 +49,9 @@ Three things happen on a stream and they are the same page. `mode` picks which:
 | `brb` | Be Right Back | red **Back Now** |
 | `ending` | Stream Ending, with *Thanks for watching* under it | goes amber |
 
-The small badge above the headline carries the status (`Wrapping up`, `Offline`)
-while the headline makes the statement, so the two never print the same words.
+The small badge above the headline carries the status (`Wrapping up`, `Signing
+off`) while the headline makes the statement, so the two never print the same
+words.
 
 `ending` says both things at once - the headline states it, the subline thanks
 them - so its headline does not change when the clock runs out. Only the colour
