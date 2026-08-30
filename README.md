@@ -47,7 +47,14 @@ Three things happen on a stream and they are the same page. `mode` picks which:
 | --- | --- | --- |
 | `soon` | Stream Starting Soon | red **We're Live** |
 | `brb` | Be Right Back | red **Back Now** |
-| `ending` | Stream Ending | amber **Thanks for Watching** |
+| `ending` | Stream Ending, with *Thanks for watching* under it | goes amber |
+
+The small badge above the headline carries the status (`Wrapping up`, `Offline`)
+while the headline makes the statement, so the two never print the same words.
+
+`ending` says both things at once - the headline states it, the subline thanks
+them - so its headline does not change when the clock runs out. Only the colour
+does. Setting `sub` yourself replaces the thanks.
 
 Only the words and the colour change — the clock, the video, the sound and the
 timezone behave identically in all three.
