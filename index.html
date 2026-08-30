@@ -100,6 +100,9 @@
     color:rgba(234,246,255,.5);text-transform:uppercase}
   #startsAt b{color:var(--accent);font-weight:600}
   #startsAt .tz{color:rgba(234,246,255,.62);font-weight:500}
+  #panel select{width:100%;font:inherit;font-size:13px;color:#eaf6ff;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+    border-radius:8px;padding:9px 10px}
   /* Sound with no picture: the player still has to exist and play, so it is
      parked off-screen rather than display:none - a hidden iframe gets its
      playback throttled. */
@@ -122,6 +125,15 @@
   body.live .badge{border-color:rgba(255,80,80,.5);background:rgba(255,80,80,.10);color:#ffd6d6}
   body.live .dot{background:#ff5252;box-shadow:0 0 14px #ff5252}
   body.live .clock,body.live #startsAt{display:none}
+  /* Ending closes warm rather than red - red is the "we are on" colour and
+     reusing it to say goodbye would read as the opposite of what happened. */
+  body.ended h1{background:linear-gradient(180deg,#fff,#ffe9c2 50%,#f5b642);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  body.ended .badge{border-color:rgba(245,182,66,.45);background:rgba(245,182,66,.10);color:#ffe6bb}
+  body.ended .dot{background:#f5b642;box-shadow:0 0 14px #f5b642;animation:none}
+  body.ended .clock,body.ended #startsAt{display:none}
+  body.no-clock .clock,body.no-clock #startsAt{display:none}
+  body.no-clock .dot{animation:none}
 
   /* ---------------- settings ---------------- */
   #gear{
@@ -212,6 +224,15 @@
 <aside id="panel">
   <h2>Countdown Setup</h2>
 
+  <div class="field">
+    <label>Mode</label>
+    <select id="f_mode">
+      <option value="soon">Stream Starting Soon</option>
+      <option value="brb">Be Right Back</option>
+      <option value="ending">Stream Ending</option>
+    </select>
+  </div>
+
   <div class="field"><label>Show name</label><input type="text" id="f_show" placeholder="Moon Boys Podcast"></div>
   <div class="field"><label>Headline</label><input type="text" id="f_headline" placeholder="Stream Starting Soon"></div>
   <div class="field"><label>Subtitle (optional)</label><input type="text" id="f_sub" placeholder="Episode 42"></div>
@@ -219,6 +240,11 @@
   <div class="row">
     <div class="field"><label>Date</label><input type="date" id="f_date"></div>
     <div class="field"><label>Start time</label><input type="time" id="f_time"></div>
+  </div>
+
+  <div class="field">
+    <label>&hellip;or just count down N minutes from now</label>
+    <input type="number" id="f_in" min="1" step="1" placeholder="e.g. 15 &mdash; overrides the date and time">
   </div>
 
   <div class="field">
@@ -241,7 +267,7 @@
   <div class="note">
     Everything lives in the URL &mdash; bookmark it or paste it straight into an
     OBS <b>Browser Source</b> (1920&times;1080). Params:
-    <code>?show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;transparent=1&amp;nostars=1</code>.
+    <code>?mode=soon|brb|ending&amp;show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;in=15&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;transparent=1&amp;nostars=1</code>.
     Audio is off unless you ask for it. In OBS it starts on its own; in an ordinary
     browser tab the first click anywhere turns it on.
     Time is read in each viewer's own timezone - and labelled with it - unless you add
@@ -261,9 +287,11 @@
 /* ---------------- defaults ---------------- */
 var DEFAULTS = {
   show: 'Moon Boys Podcast',
-  headline: 'Stream Starting Soon',
+  mode: 'soon',             // soon | brb | ending
+  headline: '',             // '' = whatever the mode calls itself
   sub: '',
   t: '12:30',
+  in: '',                   // minutes from now, instead of a wall-clock time
   d: '',                    // blank = today (rolls forward if long past)
   v: 'TfWotiyXGfI',
   c: '#7cf2ff',
@@ -272,6 +300,29 @@ var DEFAULTS = {
   vol: '70',                // 0-100, only meaningful with audio=1
   transparent: false,
   nostars: false
+};
+
+/* ---------------- modes ----------------
+ *
+ * Three things happen on a stream and they are the same page: it has not begun,
+ * it paused, it is wrapping up. A mode is just the words and the colour - the
+ * clock, the video, the audio and the timezone all behave identically - so
+ * nothing here reaches past naming and styling.
+ */
+var MODES = {
+  soon: {
+    badge: 'Live soon',   headline: 'Stream Starting Soon', prefix: 'Starts',
+    zeroBadge: 'Live now', zeroHeadline: "We're Live",      endClass: 'live'
+  },
+  brb: {
+    badge: 'Back soon',   headline: 'Be Right Back',        prefix: 'Back',
+    zeroBadge: 'Back now', zeroHeadline: 'Back Now',        endClass: 'live'
+  },
+  ending: {
+    badge: 'Wrapping up', headline: 'Stream Ending',        prefix: 'Ends',
+    zeroBadge: 'Thanks for watching', zeroHeadline: 'Thanks for Watching',
+    endClass: 'ended'
+  }
 };
 
 var q = new URLSearchParams(location.search);
@@ -286,6 +337,16 @@ Object.keys(DEFAULTS).forEach(function(k){
 });
 if (q.get('overlay') === '1') C.transparent = true;
 
+var MODE = MODES[String(C.mode).toLowerCase()] || MODES.soon;
+// An explicit headline always wins; otherwise the mode names itself.
+if (!C.headline) C.headline = MODE.headline;
+
+// Ending is the one mode with something to say when no time was given: a stream
+// wraps up when it wraps up. Counting down to a default 12:30 would be a lie,
+// so with no t/in the clock is dropped and only the words remain.
+var TIME_GIVEN = q.has('t') || q.has('in') || q.has('d');
+var NO_CLOCK = (MODE === MODES.ending) && !TIME_GIVEN;
+
 /* ---------------- helpers ---------------- */
 function $(id){ return document.getElementById(id); }
 
@@ -298,6 +359,11 @@ function videoId(s){
 }
 
 function computeTarget(){
+  // "back in 15" is how a break is actually thought about, so in= is measured
+  // from the moment the page loads and nothing else is consulted.
+  var mins = parseFloat(C.in);
+  if (C.in !== '' && !isNaN(mins)) return new Date(Date.now() + mins * 60000);
+
   var p = String(C.t).split(':');
   var h = parseInt(p[0], 10) || 0;
   var mi = parseInt(p[1], 10) || 0;
@@ -365,10 +431,15 @@ function localZoneLabel(when){
 var tzLabel = (C.tz !== '' && !isNaN(parseFloat(C.tz)))
   ? 'UTC' + (parseFloat(C.tz) >= 0 ? '+' : '') + C.tz
   : localZoneLabel(TARGET);
-$('startsAt').innerHTML =
-  'Starts <b>' + TARGET.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) + '</b> ' +
-  '<span class="tz">' + tzLabel + '</span>' +
-  ' · ' + TARGET.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+if (NO_CLOCK) {
+  document.body.classList.add('no-clock');
+} else {
+  $('startsAt').innerHTML =
+    MODE.prefix + ' <b>' + TARGET.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) + '</b> ' +
+    '<span class="tz">' + tzLabel + '</span>' +
+    ' · ' + TARGET.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+}
+$('badgeText').textContent = NO_CLOCK ? MODE.zeroBadge : MODE.badge;
 
 /* ---------------- background video (and its sound) ----------------
  *
@@ -494,12 +565,13 @@ function paint(id, str){
 }
 
 function tick(){
+  if (NO_CLOCK) return;
   var ms = TARGET - Date.now();
   if (ms <= 0) {
-    document.body.classList.add('live');
-    $('badgeText').textContent = 'Live now';
-    $('headline').textContent = "We're Live";
-    document.title = (C.show ? C.show + ' — ' : '') + "We're Live";
+    document.body.classList.add(MODE.endClass);
+    $('badgeText').textContent = MODE.zeroBadge;
+    $('headline').textContent = MODE.zeroHeadline;
+    document.title = (C.show ? C.show + ' — ' : '') + MODE.zeroHeadline;
     return;
   }
   var s = Math.floor(ms / 1000);
@@ -565,8 +637,11 @@ if (!C.transparent && !C.nostars) (function(){
 })();
 
 /* ---------------- settings panel ---------------- */
+$('f_mode').value = (MODES[String(C.mode).toLowerCase()] ? String(C.mode).toLowerCase() : 'soon');
+$('f_in').value = C.in;
 $('f_show').value = C.show;
-$('f_headline').value = C.headline;
+$('f_headline').value = (C.headline === MODE.headline) ? '' : C.headline;
+$('f_headline').placeholder = MODE.headline;
 $('f_sub').value = C.sub;
 $('f_time').value = C.t;
 $('f_date').value = C.d ||
@@ -581,8 +656,13 @@ $('f_nostars').checked = C.nostars;
 function buildURL(){
   var u = new URLSearchParams();
   function set(k, v, def){ if (v !== '' && v !== def) u.set(k, v); }
+  var pickedMode = $('f_mode').value;
+  set('mode', pickedMode, DEFAULTS.mode);
   set('show', $('f_show').value.trim(), DEFAULTS.show);
-  set('headline', $('f_headline').value.trim(), DEFAULTS.headline);
+  // Only a headline the user actually typed travels; otherwise the mode names
+  // itself, and switching mode later still renames the page.
+  set('headline', $('f_headline').value.trim(), (MODES[pickedMode] || MODES.soon).headline);
+  set('in', $('f_in').value.trim(), DEFAULTS.in);
   set('sub', $('f_sub').value.trim(), DEFAULTS.sub);
   set('d', $('f_date').value, DEFAULTS.d);
   set('t', $('f_time').value, DEFAULTS.t);
@@ -601,10 +681,15 @@ function buildURL(){
 }
 function refreshURL(){ $('urlOut').textContent = buildURL(); }
 
-Array.prototype.forEach.call(document.querySelectorAll('#panel input'), function(el){
+Array.prototype.forEach.call(document.querySelectorAll('#panel input, #panel select'), function(el){
   el.addEventListener('input', refreshURL);
+  el.addEventListener('change', refreshURL);
 });
 refreshURL();
+
+$('f_mode').addEventListener('change', function(){
+  $('f_headline').placeholder = (MODES[this.value] || MODES.soon).headline;
+});
 
 $('apply').addEventListener('click', function(){ location.href = buildURL(); });
 

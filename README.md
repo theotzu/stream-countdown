@@ -13,11 +13,13 @@ Paste that link into an OBS **Browser Source** (1920x1080), or just open it full
 
 | param | meaning | default |
 | --- | --- | --- |
+| `mode` | `soon`, `brb` or `ending` — see below | `soon` |
 | `show` | small label above the headline | `Moon Boys Podcast` |
-| `headline` | the big text | `Stream Starting Soon` |
+| `headline` | the big text; overrides whatever the mode calls itself | mode's own |
 | `sub` | optional line under the clock | none |
 | `t` | start time, 24h `HH:MM` | `12:30` |
 | `d` | date `YYYY-MM-DD`; blank means today, rolling to tomorrow once 3h past | none |
+| `in` | count down N minutes from page load; overrides `t` and `d` | none |
 | `v` | YouTube video/stream ID or full URL for the background | `TfWotiyXGfI` |
 | `c` | accent colour, hex | `#7cf2ff` |
 | `tz` | fixed UTC offset in hours, e.g. `-5`. Omit to use each viewer's own clock | none |
@@ -31,7 +33,35 @@ abbreviation would be right for all of them.
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `nostars=1` | hide the starfield | off |
 
-Example: `/?show=Moon%20Boys&t=12:30&tz=-5&v=TfWotiyXGfI`
+Examples:
+
+- `/?show=Moon%20Boys&t=12:30&tz=-5&v=TfWotiyXGfI` — starting soon at a set time
+- `/?mode=brb&in=15` — back in fifteen minutes
+- `/?mode=ending` — wrapping up, no clock
+
+## Modes
+
+Three things happen on a stream and they are the same page. `mode` picks which:
+
+| mode | headline | at zero |
+| --- | --- | --- |
+| `soon` | Stream Starting Soon | red **We're Live** |
+| `brb` | Be Right Back | red **Back Now** |
+| `ending` | Stream Ending | amber **Thanks for Watching** |
+
+Only the words and the colour change — the clock, the video, the sound and the
+timezone behave identically in all three.
+
+For a break, `in` is usually what you want: `?mode=brb&in=15` counts down fifteen
+minutes from the moment the page loads, so you don't have to work out the wall
+clock time mid-stream.
+
+`?mode=ending` on its own shows no clock at all — a stream wraps up when it wraps
+up, and counting down to a default time would be a lie. Give it a `t` or an `in`
+and the clock comes back.
+
+Ending closes amber rather than red, because red is the "we are on air" colour
+and reusing it to say goodbye reads as the opposite of what happened.
 
 ## Sound
 
