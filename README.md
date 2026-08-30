@@ -26,10 +26,26 @@ The start time is always labelled with its timezone. Without `tz` that is the
 viewer's own zone as their machine names it (`CDT`, `GMT+1`); with `tz` it is the
 fixed offset you pinned (`UTC-5`), because one offset spans several zones and no
 abbreviation would be right for all of them.
+| `audio=1` | play the video's sound, not just its picture | off |
+| `vol` | volume `0`-`100`, with `audio=1` | `70` |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `nostars=1` | hide the starfield | off |
 
 Example: `/?show=Moon%20Boys&t=12:30&tz=-5&v=TfWotiyXGfI`
+
+## Sound
+
+Off by default - the overlay usually sits in a scene that already has audio.
+Add `audio=1` for a music bed from the background video.
+
+In an **OBS Browser Source it just starts**, because OBS runs its browser with
+the autoplay restrictions relaxed. In an ordinary browser tab it cannot: nothing
+is allowed to autoplay audibly before you have interacted with the page. There
+the video still starts silently and a **Click for sound** button appears - and
+any click or keypress anywhere on the page does the same thing, so hitting `F`
+for fullscreen turns the sound on as a side effect.
+
+`audio=1&transparent=1` is allowed and gives you the sound with no picture.
 
 Once the clock hits zero the page flips to a red "We're Live" state on its own.
 

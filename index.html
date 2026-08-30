@@ -100,6 +100,19 @@
     color:rgba(234,246,255,.5);text-transform:uppercase}
   #startsAt b{color:var(--accent);font-weight:600}
   #startsAt .tz{color:rgba(234,246,255,.62);font-weight:500}
+  /* Sound with no picture: the player still has to exist and play, so it is
+     parked off-screen rather than display:none - a hidden iframe gets its
+     playback throttled. */
+  #bg.audio-only{opacity:0;pointer-events:none}
+  #sound{
+    position:fixed;left:50%;bottom:34px;transform:translateX(-50%);
+    z-index:40;cursor:pointer;
+    font:inherit;font-size:13px;letter-spacing:.12em;text-transform:uppercase;
+    color:#0b1016;background:var(--accent);border:0;border-radius:999px;
+    padding:11px 22px;font-weight:600;
+    box-shadow:0 6px 26px rgba(0,0,0,.45)
+  }
+  #sound[hidden]{display:none}
   #sub{font-size:clamp(11px,1.2vw,16px);letter-spacing:.14em;color:rgba(234,246,255,.42)}
   #sub:empty{display:none}
 
@@ -215,6 +228,9 @@
 
   <div class="field"><label>Accent colour</label><input type="color" id="f_color" value="#7cf2ff"></div>
 
+  <label class="check"><input type="checkbox" id="f_audio"> Play the video's audio</label>
+  <div class="field"><label>Volume (0&ndash;100)</label><input type="number" id="f_vol" min="0" max="100" step="5" placeholder="70"></div>
+
   <label class="check"><input type="checkbox" id="f_transparent"> Transparent (OBS overlay mode)</label>
   <label class="check"><input type="checkbox" id="f_nostars"> Hide starfield</label>
 
@@ -225,12 +241,16 @@
   <div class="note">
     Everything lives in the URL &mdash; bookmark it or paste it straight into an
     OBS <b>Browser Source</b> (1920&times;1080). Params:
-    <code>?show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;v=videoId&amp;c=hexcolor&amp;transparent=1&amp;nostars=1</code>.
+    <code>?show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;transparent=1&amp;nostars=1</code>.
+    Audio is off unless you ask for it. In OBS it starts on its own; in an ordinary
+    browser tab the first click anywhere turns it on.
     Time is read in each viewer's own timezone - and labelled with it - unless you add
     <code>&amp;tz=-5</code> (UTC offset in hours), which pins it for everyone.
     Keys: <b>S</b> settings, <b>F</b> fullscreen, <b>H</b> hide hint.
   </div>
 </aside>
+
+<button id="sound" hidden>&#9835; Click for sound</button>
 
 <div id="hint">S for settings &middot; F for fullscreen</div>
 
@@ -248,6 +268,8 @@ var DEFAULTS = {
   v: 'TfWotiyXGfI',
   c: '#7cf2ff',
   tz: '',                   // '' = each viewer's local time; e.g. '-5' = fixed UTC-5
+  audio: false,             // play the YouTube audio as well as the picture
+  vol: '70',                // 0-100, only meaningful with audio=1
   transparent: false,
   nostars: false
 };
@@ -348,9 +370,32 @@ $('startsAt').innerHTML =
   '<span class="tz">' + tzLabel + '</span>' +
   ' · ' + TARGET.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
 
-/* ---------------- background video ---------------- */
+/* ---------------- background video (and its sound) ----------------
+ *
+ * Silent is still the default: this thing is usually a Browser Source sitting
+ * in a scene that already has audio, and an overlay that starts making noise
+ * on its own is a bug, not a feature. audio=1 opts in.
+ *
+ * Muted playback can just be an iframe. Sound cannot: every browser refuses to
+ * autoplay audible media until the page has been interacted with, and the only
+ * way to find out whether the refusal happened - and to recover from it - is
+ * the IFrame Player API. So audio=1 loads the API and drives a real player.
+ *
+ * OBS is the exception that makes this worth doing: its browser source runs
+ * CEF with the autoplay policy relaxed, so on stream the unmute simply works
+ * and no one ever sees the fallback. The fallback is for a normal tab.
+ *
+ * audio=1 with transparent=1 is legitimate - a music bed under an overlay that
+ * shows no picture - so that combination keeps the player and hides it rather
+ * than dropping it.
+ */
 var vid = videoId(C.v);
-if (!C.transparent && vid) {
+var wantsPicture = !C.transparent && vid;
+var wantsSound = C.audio && !!vid;
+var VOL = Math.max(0, Math.min(100, parseInt(C.vol, 10) || 0));
+
+if (wantsPicture && !wantsSound) {
+  // Silent: no API, no player object, just the frame.
   var params = new URLSearchParams({
     autoplay:'1', mute:'1', controls:'0', loop:'1', playlist:vid,
     modestbranding:'1', playsinline:'1', rel:'0', iv_load_policy:'3', disablekb:'1', fs:'0'
@@ -361,6 +406,73 @@ if (!C.transparent && vid) {
   frame.setAttribute('frameborder', '0');
   frame.setAttribute('title', 'background video');
   $('bg').appendChild(frame);
+
+} else if (wantsSound) {
+  if (!wantsPicture) $('bg').classList.add('audio-only');
+
+  var mount = document.createElement('div');
+  mount.id = 'ytplayer';
+  $('bg').appendChild(mount);
+
+  var player = null;
+
+  // Starting muted and unmuting on the way in is what makes this survive a
+  // strict browser: the video is already rolling, so the worst case is a silent
+  // stream plus a prompt, never a black frame.
+  window.onYouTubeIframeAPIReady = function(){
+    player = new YT.Player('ytplayer', {
+      host: 'https://www.youtube-nocookie.com',
+      videoId: vid,
+      playerVars: {
+        autoplay:1, mute:1, controls:0, loop:1, playlist:vid,
+        modestbranding:1, playsinline:1, rel:0, iv_load_policy:3, disablekb:1, fs:0
+      },
+      events: {
+        onReady: function(e){
+          e.target.setVolume(VOL);
+          e.target.unMute();
+          e.target.playVideo();
+        },
+        onStateChange: function(e){
+          if (e.data === YT.PlayerState.PLAYING) {
+            // isMuted() after playback begins is the honest answer about
+            // whether the unmute was allowed to stick.
+            if (e.target.isMuted()) showSoundPrompt(); else hideSoundPrompt();
+          }
+        }
+      }
+    });
+  };
+
+  var tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+
+  function enableSound(){
+    if (!player || !player.unMute) return;
+    player.unMute();
+    player.setVolume(VOL);
+    player.playVideo();
+    // Trust the player, not the click: only drop the prompt once it is
+    // actually unmuted.
+    setTimeout(function(){ if (!player.isMuted()) hideSoundPrompt(); }, 120);
+  }
+  function showSoundPrompt(){ $('sound').hidden = false; }
+  function hideSoundPrompt(){ $('sound').hidden = true; }
+
+  $('sound').addEventListener('click', enableSound);
+
+  // Any interaction anywhere counts as the gesture the browser was holding out
+  // for, so pressing F for fullscreen fixes the sound as a side effect. The
+  // listener only stands down once there was a player to act on - an early
+  // click, before the API finished loading, must not burn the one chance.
+  ['pointerdown','keydown'].forEach(function(evt){
+    document.addEventListener(evt, function retry(){
+      if (!player || !player.unMute) return;
+      document.removeEventListener(evt, retry);
+      enableSound();
+    });
+  });
 }
 
 /* ---------------- countdown ---------------- */
@@ -461,6 +573,8 @@ $('f_date').value = C.d ||
   (TARGET.getFullYear() + '-' + pad(TARGET.getMonth() + 1) + '-' + pad(TARGET.getDate()));
 $('f_video').value = C.v;
 $('f_color').value = /^#[0-9a-f]{6}$/i.test(C.c) ? C.c : '#7cf2ff';
+$('f_audio').checked = C.audio;
+$('f_vol').value = VOL;
 $('f_transparent').checked = C.transparent;
 $('f_nostars').checked = C.nostars;
 
@@ -475,6 +589,11 @@ function buildURL(){
   set('v', videoId($('f_video').value) || $('f_video').value.trim(), DEFAULTS.v);
   set('c', $('f_color').value, DEFAULTS.c);
   if (C.tz !== '') u.set('tz', C.tz);
+  if ($('f_audio').checked) {
+    u.set('audio', '1');
+    var v = $('f_vol').value.trim();
+    if (v !== '' && v !== DEFAULTS.vol) u.set('vol', v);
+  }
   if ($('f_transparent').checked) u.set('transparent', '1');
   if ($('f_nostars').checked) u.set('nostars', '1');
   var s = u.toString();
