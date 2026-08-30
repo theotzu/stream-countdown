@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stream Starting Soon</title>
 <meta name="description" content="A reusable countdown overlay for livestreams. Configure with URL params or the built-in panel.">
+<meta name="color-scheme" content="dark">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127769;</text></svg>">
 <style>
   :root{
@@ -101,8 +102,11 @@
   #startsAt b{color:var(--accent);font-weight:600}
   #startsAt .tz{color:rgba(234,246,255,.62);font-weight:500}
   #panel select{width:100%;font:inherit;font-size:13px;color:#eaf6ff;
+    color-scheme:dark;
     background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
     border-radius:8px;padding:9px 10px}
+  #panel select option{background:#11161d;color:#eaf6ff}
+  #panel input[type=date],#panel input[type=time],#panel input[type=number]{color-scheme:dark}
   /* Sound with no picture: the player still has to exist and play, so it is
      parked off-screen rather than display:none - a hidden iframe gets its
      playback throttled. */
