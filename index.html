@@ -99,6 +99,7 @@
   #startsAt{font-size:clamp(11px,1.25vw,17px);letter-spacing:.16em;
     color:rgba(234,246,255,.5);text-transform:uppercase}
   #startsAt b{color:var(--accent);font-weight:600}
+  #startsAt .tz{color:rgba(234,246,255,.62);font-weight:500}
   #sub{font-size:clamp(11px,1.2vw,16px);letter-spacing:.14em;color:rgba(234,246,255,.42)}
   #sub:empty{display:none}
 
@@ -225,7 +226,8 @@
     Everything lives in the URL &mdash; bookmark it or paste it straight into an
     OBS <b>Browser Source</b> (1920&times;1080). Params:
     <code>?show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;v=videoId&amp;c=hexcolor&amp;transparent=1&amp;nostars=1</code>.
-    Time is read in each viewer's own timezone unless you add <code>&amp;tz=-5</code> (UTC offset in hours).
+    Time is read in each viewer's own timezone - and labelled with it - unless you add
+    <code>&amp;tz=-5</code> (UTC offset in hours), which pins it for everyone.
     Keys: <b>S</b> settings, <b>F</b> fullscreen, <b>H</b> hide hint.
   </div>
 </aside>
@@ -310,11 +312,41 @@ $('sub').textContent = C.sub;
 document.title = (C.show ? C.show + ' — ' : '') + C.headline;
 if (C.transparent) document.body.classList.add('transparent');
 
+// A bare "Starts 12:30 PM" is ambiguous to anyone reading it - so the zone is
+// always named, never left implied.
+//
+// Without tz= the clock IS the viewer's own, so name their zone: CDT, GMT,
+// AEST, whatever their machine says. Intl gives the abbreviation the reader
+// already recognises; where a locale has no short name it falls back to a GMT
+// offset, which is still unambiguous.
+//
+// With tz= the time is pinned to a fixed offset for every viewer, and no
+// abbreviation can be correct for all of them - one offset covers several
+// zones. So that path keeps saying UTC-5, which is true everywhere.
+function localZoneLabel(when){
+  try {
+    var parts = new Intl.DateTimeFormat([], {
+      hour: 'numeric', timeZoneName: 'short'
+    }).formatToParts(when);
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].type === 'timeZoneName' && parts[i].value) return parts[i].value;
+    }
+  } catch (e) { /* fall through to the offset */ }
+  // Older engines, or a locale with no name: build the offset by hand.
+  var mins = -when.getTimezoneOffset();
+  var sign = mins >= 0 ? '+' : '-';
+  var a = Math.abs(mins);
+  var hh = Math.floor(a / 60), mm = a % 60;
+  return 'UTC' + sign + hh + (mm ? ':' + String(mm).padStart(2, '0') : '');
+}
+
 var tzLabel = (C.tz !== '' && !isNaN(parseFloat(C.tz)))
-  ? ' (UTC' + (parseFloat(C.tz) >= 0 ? '+' : '') + C.tz + ')' : '';
+  ? 'UTC' + (parseFloat(C.tz) >= 0 ? '+' : '') + C.tz
+  : localZoneLabel(TARGET);
 $('startsAt').innerHTML =
-  'Starts <b>' + TARGET.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) + '</b>' +
-  tzLabel + ' · ' + TARGET.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+  'Starts <b>' + TARGET.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) + '</b> ' +
+  '<span class="tz">' + tzLabel + '</span>' +
+  ' · ' + TARGET.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
 
 /* ---------------- background video ---------------- */
 var vid = videoId(C.v);

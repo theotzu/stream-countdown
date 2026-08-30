@@ -21,6 +21,11 @@ Paste that link into an OBS **Browser Source** (1920x1080), or just open it full
 | `v` | YouTube video/stream ID or full URL for the background | `TfWotiyXGfI` |
 | `c` | accent colour, hex | `#7cf2ff` |
 | `tz` | fixed UTC offset in hours, e.g. `-5`. Omit to use each viewer's own clock | none |
+
+The start time is always labelled with its timezone. Without `tz` that is the
+viewer's own zone as their machine names it (`CDT`, `GMT+1`); with `tz` it is the
+fixed offset you pinned (`UTC-5`), because one offset spans several zones and no
+abbreviation would be right for all of them.
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `nostars=1` | hide the starfield | off |
 
