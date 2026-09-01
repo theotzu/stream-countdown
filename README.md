@@ -30,6 +30,9 @@ fixed offset you pinned (`UTC-5`), because one offset spans several zones and no
 abbreviation would be right for all of them.
 | `audio=1` | play the video's sound, not just its picture | off |
 | `vol` | volume `0`-`100`, with `audio=1` | `70` |
+| `chart=1` | live chart behind the clock instead of the video | off |
+| `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
+| `ci` | minutes per candle | `3` |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `nostars=1` | hide the starfield | off |
 
@@ -38,6 +41,7 @@ Examples:
 - `/?show=Moon%20Boys&t=12:30&tz=-5&v=TfWotiyXGfI` — starting soon at a set time
 - `/?mode=brb&in=15` — back in fifteen minutes
 - `/?mode=ending` — wrapping up, no clock
+- `/?chart=1&audio=1` — live BTC chart with the music still playing
 
 ## Modes
 
@@ -70,6 +74,37 @@ and the clock comes back.
 
 Ending closes amber rather than red, because red is the "we are on air" colour
 and reusing it to say goodbye reads as the opposite of what happened.
+
+## Putting a market on the screen
+
+A countdown with nothing but music on it is dead air. `chart=1` replaces the
+video with a live chart and pairs with `audio=1` to keep the music underneath:
+
+```
+/?chart=1&audio=1&t=12:30
+```
+
+Defaults to BTC on a 3-minute candle. `csym` and `ci` change that.
+
+### Why this is TradingView and not aggr
+
+**aggr.trade cannot be embedded.** It serves `X-Frame-Options: DENY` and
+`Content-Security-Policy: frame-ancestors 'self' *.aggr.trade`, so no page
+anywhere is allowed to frame it - this one included, and OBS's browser enforces
+that the same as any other. It is aggr's deliberate policy, not a bug to route
+around.
+
+**For real aggr on stream, layer it in OBS instead of embedding it:**
+
+1. Add this page as a Browser Source, 1920x1080, with `chart=0&audio=1` (or the
+   video background, whichever you want behind it).
+2. Add a *second* Browser Source above it pointing at your aggr.trade layout.
+3. Size and position it, and use **Crop** (Alt-drag its edges) to keep just the
+   chart and the trade feed.
+
+That gets you the real thing - orderbook, aggregated tape, liquidations - which
+no embed could have given you anyway. Add `transparent=1` to this page if you
+want the countdown text floating over the aggr source rather than the reverse.
 
 ## Sound
 

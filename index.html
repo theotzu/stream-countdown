@@ -23,6 +23,17 @@
   body.transparent{background:transparent}
 
   /* ---------------- background ---------------- */
+  #chart{position:fixed;inset:0;z-index:0;overflow:hidden}
+  #chart iframe{width:100%;height:100%;border:0}
+  /* A chart is there to be read, so it does not get the full cinematic murk a
+     rainstorm loop can take. The vignette still pulls the middle down enough to
+     keep the clock legible over candles. */
+  body.charted #scrim{
+    background:
+      radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.55) 0%, rgba(4,6,15,.42) 46%, rgba(4,6,15,.62) 100%),
+      linear-gradient(180deg, rgba(4,6,15,.55) 0%, rgba(4,6,15,0) 30%, rgba(4,6,15,0) 70%, rgba(4,6,15,.70) 100%);
+  }
+  body.charted #stars{display:none}
   #bg{position:fixed;inset:0;overflow:hidden;z-index:0}
   #bg iframe{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -36,7 +47,8 @@
       radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.30) 0%, rgba(4,6,15,.70) 46%, rgba(4,6,15,.93) 100%),
       linear-gradient(180deg, rgba(4,6,15,.70) 0%, rgba(4,6,15,0) 26%, rgba(4,6,15,0) 68%, rgba(4,6,15,.88) 100%);
   }
-  body.transparent #bg,body.transparent #scrim,body.transparent #stars{display:none}
+  body.transparent #bg,body.transparent #scrim,body.transparent #stars,
+  body.transparent #chart{display:none}
 
   /* ---------------- content ---------------- */
   main{
@@ -200,6 +212,7 @@
 </head>
 <body>
 
+<div id="chart"></div>
 <div id="bg"></div>
 <canvas id="stars"></canvas>
 <div id="scrim"></div>
@@ -258,6 +271,12 @@
 
   <div class="field"><label>Accent colour</label><input type="color" id="f_color" value="#7cf2ff"></div>
 
+  <label class="check"><input type="checkbox" id="f_chart"> Live chart instead of the video</label>
+  <div class="row">
+    <div class="field"><label>Symbol</label><input type="text" id="f_csym" placeholder="BINANCE:BTCUSDT"></div>
+    <div class="field"><label>Minutes per candle</label><input type="number" id="f_ci" min="1" step="1" placeholder="3"></div>
+  </div>
+
   <label class="check"><input type="checkbox" id="f_audio"> Play the video's audio</label>
   <div class="field"><label>Volume (0&ndash;100)</label><input type="number" id="f_vol" min="0" max="100" step="5" placeholder="70"></div>
 
@@ -271,7 +290,10 @@
   <div class="note">
     Everything lives in the URL &mdash; bookmark it or paste it straight into an
     OBS <b>Browser Source</b> (1920&times;1080). Params:
-    <code>?mode=soon|brb|ending&amp;show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;in=15&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;transparent=1&amp;nostars=1</code>.
+    <code>?mode=soon|brb|ending&amp;show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;in=15&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;chart=1&amp;csym=BINANCE:BTCUSDT&amp;ci=3&amp;transparent=1&amp;nostars=1</code>.
+    <b>chart=1</b> puts a live market behind the clock instead of the video, and pairs with
+    <b>audio=1</b> to keep the music. It is TradingView, not aggr &mdash; aggr refuses to be
+    embedded anywhere; layer that one in OBS instead.
     Audio is off unless you ask for it. In OBS it starts on its own; in an ordinary
     browser tab the first click anywhere turns it on.
     Time is read in each viewer's own timezone - and labelled with it - unless you add
@@ -302,6 +324,9 @@ var DEFAULTS = {
   tz: '',                   // '' = each viewer's local time; e.g. '-5' = fixed UTC-5
   audio: false,             // play the YouTube audio as well as the picture
   vol: '70',                // 0-100, only meaningful with audio=1
+  chart: false,             // live chart instead of the video picture
+  csym: 'BINANCE:BTCUSDT',  // what to chart
+  ci: '3',                  // candle interval in minutes
   transparent: false,
   nostars: false
 };
@@ -470,8 +495,33 @@ $('badgeText').textContent = MODE.badge;
  * shows no picture - so that combination keeps the player and hides it rather
  * than dropping it.
  */
+/* A countdown with nothing but music on it is dead air. chart=1 puts a live
+ * market on the page instead of the loop, and audio=1 keeps the music playing
+ * underneath it - the player is already built to run with no picture.
+ *
+ * This is NOT aggr. aggr.trade refuses to be embedded - it sends
+ * X-Frame-Options: DENY and frame-ancestors 'self', so no page anywhere can
+ * frame it, this one included. For real aggr, layer it in OBS as its own
+ * Browser Source above this one; see the README.
+ */
+if (C.chart) {
+  document.body.classList.add('charted');
+  var cf = document.createElement('iframe');
+  var cp = new URLSearchParams({
+    symbol: C.csym, interval: C.ci, theme: 'dark', style: '1',
+    hidesidetoolbar: '1', hidetoptoolbar: '1', withdateranges: '0',
+    saveimage: '0', hideideas: '1', timezone: 'Etc/UTC'
+  });
+  cf.src = 'https://s.tradingview.com/widgetembed/?' + cp.toString();
+  cf.setAttribute('frameborder', '0');
+  cf.setAttribute('title', 'live chart');
+  cf.setAttribute('scrolling', 'no');
+  document.getElementById('chart').appendChild(cf);
+}
+
 var vid = videoId(C.v);
-var wantsPicture = !C.transparent && vid;
+// With a chart up, the video is only ever there for its sound.
+var wantsPicture = !C.transparent && !C.chart && vid;
 var wantsSound = C.audio && !!vid;
 var VOL = Math.max(0, Math.min(100, parseInt(C.vol, 10) || 0));
 
@@ -659,6 +709,9 @@ $('f_date').value = C.d ||
   (TARGET.getFullYear() + '-' + pad(TARGET.getMonth() + 1) + '-' + pad(TARGET.getDate()));
 $('f_video').value = C.v;
 $('f_color').value = /^#[0-9a-f]{6}$/i.test(C.c) ? C.c : '#7cf2ff';
+$('f_chart').checked = C.chart;
+$('f_csym').value = (C.csym === DEFAULTS.csym) ? '' : C.csym;
+$('f_ci').value = (C.ci === DEFAULTS.ci) ? '' : C.ci;
 $('f_audio').checked = C.audio;
 $('f_vol').value = VOL;
 $('f_transparent').checked = C.transparent;
@@ -680,6 +733,11 @@ function buildURL(){
   set('v', videoId($('f_video').value) || $('f_video').value.trim(), DEFAULTS.v);
   set('c', $('f_color').value, DEFAULTS.c);
   if (C.tz !== '') u.set('tz', C.tz);
+  if ($('f_chart').checked) {
+    u.set('chart', '1');
+    set('csym', $('f_csym').value.trim().toUpperCase(), DEFAULTS.csym);
+    set('ci', $('f_ci').value.trim(), DEFAULTS.ci);
+  }
   if ($('f_audio').checked) {
     u.set('audio', '1');
     var v = $('f_vol').value.trim();
