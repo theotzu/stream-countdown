@@ -32,7 +32,7 @@ abbreviation would be right for all of them.
 | `vol` | volume `0`-`100`, with `audio=1` | `70` |
 | `chart=1` | live chart behind the clock instead of the video | off |
 | `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
-| `ci` | minutes per candle | `3` |
+| `ci` | timeframe: `1`, `5`, `60`, `1D`, `1W`&hellip; | `1D` |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `nostars=1` | hide the starfield | off |
 
@@ -84,7 +84,10 @@ video with a live chart and pairs with `audio=1` to keep the music underneath:
 /?chart=1&audio=1&t=12:30
 ```
 
-Defaults to BTC on a 3-minute candle. `csym` and `ci` change that.
+Defaults to BTC on the daily. `csym` and `ci` change that.
+
+Sub-minute intervals are not offered: seconds are a paid TradingView feature and
+the free embed quietly serves 1-minute candles instead of saying so.
 
 ### Why this is TradingView and not aggr
 

@@ -274,7 +274,12 @@
   <label class="check"><input type="checkbox" id="f_chart"> Live chart instead of the video</label>
   <div class="row">
     <div class="field"><label>Symbol</label><input type="text" id="f_csym" placeholder="BINANCE:BTCUSDT"></div>
-    <div class="field"><label>Minutes per candle</label><input type="number" id="f_ci" min="1" step="1" placeholder="3"></div>
+    <div class="field"><label>Timeframe</label><select id="f_ci"></select></div>
+  </div>
+
+  <div class="field">
+    <label>Indicators (comma separated)</label>
+    <input type="text" id="f_ind" placeholder="moonboys, rsi, macd, volume, ma, boll">
   </div>
 
   <label class="check"><input type="checkbox" id="f_audio"> Play the video's audio</label>
@@ -292,7 +297,8 @@
     OBS <b>Browser Source</b> (1920&times;1080). Params:
     <code>?mode=soon|brb|ending&amp;show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;in=15&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;chart=1&amp;csym=BINANCE:BTCUSDT&amp;ci=3&amp;transparent=1&amp;nostars=1</code>.
     <b>chart=1</b> puts a live market behind the clock instead of the video, and pairs with
-    <b>audio=1</b> to keep the music. It is TradingView, not aggr &mdash; aggr refuses to be
+    <b>audio=1</b> to keep the music. <b>ci</b> is the timeframe (<code>5S</code>, <code>60</code>,
+    <code>1D</code>&hellip;) and <b>ind</b> the indicators (<code>moonboys</code>, <code>rsi</code>&hellip;). It is TradingView, not aggr &mdash; aggr refuses to be
     embedded anywhere; layer that one in OBS instead.
     Audio is off unless you ask for it. In OBS it starts on its own; in an ordinary
     browser tab the first click anywhere turns it on.
@@ -326,7 +332,8 @@ var DEFAULTS = {
   vol: '70',                // 0-100, only meaningful with audio=1
   chart: false,             // live chart instead of the video picture
   csym: 'BINANCE:BTCUSDT',  // what to chart
-  ci: '3',                  // candle interval in minutes
+  ci: '1D',                 // TradingView interval: 1, 60, 1D, 1W ...
+  ind: '',                  // indicators, comma separated
   transparent: false,
   nostars: false
 };
@@ -357,6 +364,30 @@ var MODES = {
     zeroBadge: 'Signing off', zeroHeadline: 'Stream Ending',
     endClass: 'ended'
   }
+};
+
+/* TradingView's own interval codes: bare numbers are minutes, S is seconds,
+ * D/W/M are days/weeks/months. Kept as the raw code so ci= is passed straight
+ * through and any interval TradingView adds later works without a change here.
+ */
+var TIMEFRAMES = [
+  ['1', '1 minute'],   ['3', '3 minutes'],    ['5', '5 minutes'],
+  ['15', '15 minutes'],['30', '30 minutes'],  ['60', '1 hour'],
+  ['120', '2 hours'],  ['240', '4 hours'],
+  ['1D', '1 day'],     ['1W', '1 week'],      ['1M', '1 month']
+];
+
+/* Friendly names for the indicators worth having on a countdown, so the URL
+ * reads ind=moonboys rather than ind=PUB;5xZSUQ3b. Anything not in this list is
+ * passed through untouched, so a raw TradingView study id still works.
+ */
+var INDICATORS = {
+  moonboys: 'PUB;5xZSUQ3b',            // MoonBoys Line - Theo's own, public
+  rsi:      'RSI@tv-basicstudies',
+  macd:     'MACD@tv-basicstudies',
+  volume:   'Volume@tv-basicstudies',
+  ma:       'MASimple@tv-basicstudies',
+  boll:     'BB@tv-basicstudies'
 };
 
 var q = new URLSearchParams(location.search);
@@ -512,6 +543,12 @@ if (C.chart) {
     hidesidetoolbar: '1', hidetoptoolbar: '1', withdateranges: '0',
     saveimage: '0', hideideas: '1', timezone: 'Etc/UTC'
   });
+  var studies = String(C.ind).split(',')
+    .map(function (n) { return n.trim(); })
+    .filter(Boolean)
+    .map(function (n) { return INDICATORS[n.toLowerCase()] || n; });
+  // studies goes on as repeated params, which is the shape the widget reads.
+  studies.forEach(function (id) { cp.append('studies', id); });
   cf.src = 'https://s.tradingview.com/widgetembed/?' + cp.toString();
   cf.setAttribute('frameborder', '0');
   cf.setAttribute('title', 'live chart');
@@ -711,7 +748,14 @@ $('f_video').value = C.v;
 $('f_color').value = /^#[0-9a-f]{6}$/i.test(C.c) ? C.c : '#7cf2ff';
 $('f_chart').checked = C.chart;
 $('f_csym').value = (C.csym === DEFAULTS.csym) ? '' : C.csym;
-$('f_ci').value = (C.ci === DEFAULTS.ci) ? '' : C.ci;
+TIMEFRAMES.forEach(function (tf) {
+  var o = document.createElement('option');
+  o.value = tf[0];
+  o.textContent = tf[1];
+  $('f_ci').appendChild(o);
+});
+$('f_ci').value = C.ci;
+$('f_ind').value = C.ind;
 $('f_audio').checked = C.audio;
 $('f_vol').value = VOL;
 $('f_transparent').checked = C.transparent;
@@ -736,7 +780,8 @@ function buildURL(){
   if ($('f_chart').checked) {
     u.set('chart', '1');
     set('csym', $('f_csym').value.trim().toUpperCase(), DEFAULTS.csym);
-    set('ci', $('f_ci').value.trim(), DEFAULTS.ci);
+    set('ci', $('f_ci').value, DEFAULTS.ci);
+    set('ind', $('f_ind').value.trim(), DEFAULTS.ind);
   }
   if ($('f_audio').checked) {
     u.set('audio', '1');
