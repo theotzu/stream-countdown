@@ -676,15 +676,44 @@ function drawMoonBoys(){
   var start = Math.max(0, bars.length - count);
   var view = bars.slice(start);
 
-  var lo = Infinity, hi = -Infinity;
+  // Scaling has to serve two masters. Fitting the daily averages AND the candles
+  // is right on the daily, where they sit close together - but on a 1-minute
+  // chart the 200 can be 13% away, and fitting it crushes an hour of price into
+  // a hairline at the top of the screen.
+  //
+  // So price action is guaranteed a floor share of the height. Averages are
+  // included while they fit inside that, and simply run off the edge when they
+  // do not: an average you cannot see beats candles you cannot read, and the
+  // state readout says where price stands regardless.
+  var PRICE_MIN_SHARE = 0.42;
+  var plo = Infinity, phi = -Infinity;
   for (var i = start; i < bars.length; i++) {
-    lo = Math.min(lo, bars[i].l); hi = Math.max(hi, bars[i].h);
+    plo = Math.min(plo, bars[i].l); phi = Math.max(phi, bars[i].h);
+  }
+  var lo = plo, hi = phi;
+  for (var i = start; i < bars.length; i++) {
     [f[i], sl[i], mac[i]].forEach(function (v) {
       if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
     });
   }
+  var priceRange = (phi - plo) || 1;
+  var fullRange = (hi - lo) || 1;
+  if (priceRange / fullRange < PRICE_MIN_SHARE) {
+    var want = priceRange / PRICE_MIN_SHARE;
+    var mid = (phi + plo) / 2;
+    // Lean the window toward whichever averages are nearest, so they stay on
+    // screen as long as they can rather than being cropped symmetrically.
+    var below = mid - lo, above = hi - mid;
+    var share = above + below ? above / (above + below) : 0.5;
+    share = Math.max(0.2, Math.min(0.8, share));
+    hi = mid + want * share;
+    lo = mid - want * (1 - share);
+  }
   var span = (hi - lo) || 1;
   lo -= span * 0.06; hi += span * 0.06; span = hi - lo;
+
+  g.save();
+  g.beginPath(); g.rect(0, padT, plotW, plotH); g.clip();
 
   var x = function (i) { return (i / Math.max(view.length - 1, 1)) * (plotW - 18) + 9; };
   var y = function (v) { return padT + (1 - (v - lo) / span) * plotH; };
@@ -755,6 +784,8 @@ function drawMoonBoys(){
     else g.lineTo(x(i), y(mac[gi]));
   }
   g.stroke(); g.globalAlpha = 1;
+
+  g.restore();
 
   // Price axis, then the last price called out against its own regime.
   g.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
