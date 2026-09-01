@@ -442,6 +442,14 @@ var NO_CLOCK = (MODE === MODES.ending) && !TIME_GIVEN;
 /* ---------------- helpers ---------------- */
 function $(id){ return document.getElementById(id); }
 
+// Every one of these strings arrives from the query string, and the ones that
+// go in through innerHTML have to be escaped on the way.
+function esc(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
 function videoId(s){
   if (!s) return '';
   s = s.trim();
