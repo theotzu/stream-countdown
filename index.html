@@ -32,8 +32,8 @@
      keep the clock legible over candles. */
   body.charted #scrim{
     background:
-      radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.55) 0%, rgba(4,6,15,.42) 46%, rgba(4,6,15,.62) 100%),
-      linear-gradient(180deg, rgba(4,6,15,.55) 0%, rgba(4,6,15,0) 30%, rgba(4,6,15,0) 70%, rgba(4,6,15,.70) 100%);
+      radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.42) 0%, rgba(4,6,15,.24) 46%, rgba(4,6,15,.40) 100%),
+      linear-gradient(180deg, rgba(4,6,15,.42) 0%, rgba(4,6,15,0) 32%, rgba(4,6,15,0) 68%, rgba(4,6,15,.52) 100%);
   }
   body.charted #stars{display:none}
   #bg{position:fixed;inset:0;overflow:hidden;z-index:0}
@@ -322,7 +322,7 @@
 
 <button id="sound" hidden>&#9835; Click for sound</button>
 
-<div id="hint">S for settings &middot; F for fullscreen</div>
+<div id="hint">S for settings &middot; F for fullscreen &middot; scroll to zoom the chart</div>
 
 <script>
 (function(){
@@ -623,6 +623,17 @@ function regimeColour(r){
 
 var MBSTATE = { bars: [], f: [], sl: [], mac: [], failed: false };
 
+/* How many bars are on screen. On a long window the daily averages sit far
+ * below price and the two never appear to meet - which on a 4h chart reads as
+ * the indicator being broken when it is only zoomed too far out. So the default
+ * window is short, and the wheel (or +/-) changes it.
+ */
+var MB_BARS = 140, MB_MIN = 30, MB_MAX = 900;
+function mbZoom(factor){
+  MB_BARS = Math.max(MB_MIN, Math.min(MB_MAX, Math.round(MB_BARS * factor)));
+  drawMoonBoys();
+}
+
 function klines(sym, interval, limit){
   return fetch('https://api.binance.com/api/v3/klines?symbol=' + encodeURIComponent(sym) +
                '&interval=' + interval + '&limit=' + limit, { cache: 'no-store' })
@@ -661,7 +672,7 @@ function fetchMoonBoys(){
   var iv = TF_TO_BINANCE[C.ci] || '1d';
   // 200 daily bars are eaten by the slowest average before it can plot at all,
   // so the daily series is asked for far more history than is shown.
-  return Promise.all([klines(sym, iv, 520), klines(sym, '1d', 1000)])
+  return Promise.all([klines(sym, iv, 1000), klines(sym, '1d', 1000)])
     .then(function (both) {
       var bars = both[0], daily = both[1];
       var dc = daily.map(function (b) { return b.c; });
@@ -702,8 +713,8 @@ function drawMoonBoys(){
   var padR = 74, padB = 26, padT = 16;
   var plotW = W - padR, plotH = H - padB - padT;
 
-  // Enough candles to read at a glance without turning into a hairline comb.
-  var count = Math.max(50, Math.min(240, Math.floor(plotW / 8)));
+  // Never so many that candles become a hairline comb, never more than exist.
+  var count = Math.min(MB_BARS, bars.length, Math.max(20, Math.floor(plotW / 2.2)));
   var start = Math.max(0, bars.length - count);
   var view = bars.slice(start);
 
@@ -769,7 +780,7 @@ function drawMoonBoys(){
     if (f[gi] == null || sl[gi] == null || f[gi + 1] == null || sl[gi + 1] == null) continue;
     var r = regimeOf(view[i].c, f[gi], sl[gi]);
     g.fillStyle = regimeColour(r);
-    g.globalAlpha = 0.16;
+    g.globalAlpha = 0.22;
     g.beginPath();
     g.moveTo(x(i), y(f[gi]));
     g.lineTo(x(i + 1), y(f[gi + 1]));
@@ -784,7 +795,7 @@ function drawMoonBoys(){
   for (var i = 0; i < view.length; i++) {
     var b = view[i];
     var col = b.c >= b.o ? MB.up : MB.down;
-    g.globalAlpha = 0.55;
+    g.globalAlpha = 0.8;
     g.strokeStyle = col; g.lineWidth = 1;
     g.beginPath(); g.moveTo(x(i), y(b.h)); g.lineTo(x(i), y(b.l)); g.stroke();
     g.fillStyle = col;
@@ -794,7 +805,7 @@ function drawMoonBoys(){
   }
 
   // The averages. 44 and 125 change colour with the regime, segment by segment.
-  [[f, 2.2], [sl, 2.2]].forEach(function (pair) {
+  [[f, 2.6], [sl, 2.6]].forEach(function (pair) {
     var arr = pair[0];
     g.lineWidth = pair[1];
     for (var i = 0; i < view.length - 1; i++) {
@@ -805,7 +816,7 @@ function drawMoonBoys(){
     }
   });
 
-  g.strokeStyle = MB.macro; g.lineWidth = 1.6; g.globalAlpha = 0.9;
+  g.strokeStyle = MB.macro; g.lineWidth = 2; g.globalAlpha = 1;
   g.beginPath();
   var started = false;
   for (var i = 0; i < view.length; i++) {
@@ -869,6 +880,31 @@ if (C.chart && wantsMoonBoys) {
   setInterval(function () {
     if (document.visibilityState === 'visible') fetchMoonBoys();
   }, 60000);
+
+  // Wheel zooms. passive:false because the page must not scroll underneath it -
+  // there is nowhere to scroll to, and the rubber-banding looks broken on a
+  // full-bleed background.
+  addEventListener('wheel', function (e) {
+    if (document.body.classList.contains('panel-open')) return;
+    e.preventDefault();
+    mbZoom(e.deltaY > 0 ? 1.15 : 0.87);
+  }, { passive: false });
+
+  // Pinch, for driving it from a phone.
+  var pinch = null;
+  addEventListener('touchstart', function (e) {
+    if (e.touches.length === 2) {
+      pinch = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                         e.touches[0].clientY - e.touches[1].clientY);
+    }
+  }, { passive: true });
+  addEventListener('touchmove', function (e) {
+    if (e.touches.length !== 2 || !pinch) return;
+    var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                       e.touches[0].clientY - e.touches[1].clientY);
+    if (Math.abs(d - pinch) > 8) { mbZoom(pinch / d); pinch = d; }
+  }, { passive: true });
+  addEventListener('touchend', function () { pinch = null; });
 } else if (C.chart) {
   document.body.classList.add('charted');
   var cf = document.createElement('iframe');
@@ -1190,6 +1226,10 @@ addEventListener('keydown', function(e){
   else if (k === 'f') {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();
+  }
+  else if ((k === '+' || k === '=' || k === '-' || k === '_') &&
+           document.body.classList.contains('moonboys')) {
+    mbZoom(k === '-' || k === '_' ? 1.15 : 0.87);
   }
 });
 setTimeout(function(){ $('hint').classList.add('hide'); }, 8000);
