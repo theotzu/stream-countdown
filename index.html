@@ -590,21 +590,54 @@ function regimeColour(r){
   return r === 'bull' ? MB.gold : r === 'bear' ? MB.blue : MB.grey;
 }
 
-var MBSTATE = { bars: [], failed: false };
+var MBSTATE = { bars: [], f: [], sl: [], mac: [], failed: false };
+
+function klines(sym, interval, limit){
+  return fetch('https://api.binance.com/api/v3/klines?symbol=' + encodeURIComponent(sym) +
+               '&interval=' + interval + '&limit=' + limit, { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (rows) {
+      return rows.map(function (k) {
+        return { t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4] };
+      });
+    });
+}
+
+/* THE AVERAGES ARE ALWAYS DAILY. This is the whole character of the indicator:
+ * the Pine script pulls its 44/125/200 from the daily timeframe, so dropping to
+ * a 1-minute chart does not recompute them on 1-minute data - the same daily
+ * lines sit there while price moves against them.
+ *
+ * Computing them on whatever interval was loaded, which is what this did at
+ * first, produces a completely different indicator that merely looks similar on
+ * the daily, where the two happen to coincide.
+ *
+ * So: candles come from the chosen interval, the averages always come from a
+ * separate daily series, and each displayed bar takes the daily value in force
+ * at its own timestamp.
+ */
+function mapDaily(bars, daily, arr){
+  var out = new Array(bars.length).fill(null), j = 0;
+  for (var i = 0; i < bars.length; i++) {
+    while (j + 1 < daily.length && daily[j + 1].t <= bars[i].t) j++;
+    out[i] = (daily[j] && daily[j].t <= bars[i].t) ? arr[j] : null;
+  }
+  return out;
+}
 
 function fetchMoonBoys(){
   var sym = binanceSymbol(C.csym);
   var iv = TF_TO_BINANCE[C.ci] || '1d';
-  // 200 bars of history are consumed by the slowest average before the first
-  // point can even be drawn, so ask for the window plus that runway.
-  var url = 'https://api.binance.com/api/v3/klines?symbol=' + encodeURIComponent(sym) +
-            '&interval=' + iv + '&limit=520';
-  return fetch(url, { cache: 'no-store' })
-    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-    .then(function (rows) {
-      MBSTATE.bars = rows.map(function (k) {
-        return { t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4] };
-      });
+  // 200 daily bars are eaten by the slowest average before it can plot at all,
+  // so the daily series is asked for far more history than is shown.
+  return Promise.all([klines(sym, iv, 520), klines(sym, '1d', 1000)])
+    .then(function (both) {
+      var bars = both[0], daily = both[1];
+      var dc = daily.map(function (b) { return b.c; });
+      MBSTATE.bars = bars;
+      MBSTATE.f = mapDaily(bars, daily, sma(dc, 44));
+      MBSTATE.sl = mapDaily(bars, daily, sma(dc, 125));
+      MBSTATE.mac = mapDaily(bars, daily, sma(dc, 200));
       MBSTATE.failed = false;
       drawMoonBoys();
     })
@@ -633,8 +666,7 @@ function drawMoonBoys(){
     return;
   }
 
-  var closes = bars.map(function (b) { return b.c; });
-  var f = sma(closes, 44), sl = sma(closes, 125), mac = sma(closes, 200);
+  var f = MBSTATE.f, sl = MBSTATE.sl, mac = MBSTATE.mac;
 
   var padR = 74, padB = 26, padT = 16;
   var plotW = W - padR, plotH = H - padB - padT;
@@ -750,7 +782,8 @@ function drawMoonBoys(){
   g.textBaseline = 'alphabetic';
   g.fillStyle = 'rgba(234,246,255,.55)';
   var tf = (TIMEFRAMES.filter(function (t) { return t[0] === C.ci; })[0] || ['', C.ci])[1];
-  g.fillText(binanceSymbol(C.csym) + '  \u00b7  ' + tf + '  \u00b7  MoonBoys Line', 14, H - 9);
+  g.fillText(binanceSymbol(C.csym) + '  \u00b7  ' + tf +
+             '  \u00b7  MoonBoys Line (daily 44/125/200)', 14, H - 9);
   g.fillStyle = regimeColour(lastRegime);
   g.fillText(lastRegime === 'bull' ? 'Above the 44 and 125'
            : lastRegime === 'bear' ? 'Below the 44 and 125'

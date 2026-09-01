@@ -116,6 +116,14 @@ The rules, from the script's own description:
 | chop | between the 44 and the 125 | grey |
 | risk zone | below the 200 SMA | red background |
 
+**The averages are always daily, whatever the chart interval is.** That is the
+character of the indicator: the Pine script pulls its 44/125/200 from the daily
+timeframe, so dropping to a 1-minute chart leaves the same daily lines sitting
+there while price moves against them. Candles come from `ci`; the averages come
+from a separate daily series, and each displayed bar takes the daily value in
+force at its own timestamp. Computing them on the loaded interval - which this
+did at first - is a different indicator that only happens to match on the daily.
+
 It is a reimplementation, not the Pine script running - worth eyeballing against
 the real chart before trusting it on stream. Any other `ind` value still goes to
 TradingView, where only built-in studies work.
