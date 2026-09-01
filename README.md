@@ -16,7 +16,11 @@ Paste that link into an OBS **Browser Source** (1920x1080), or just open it full
 | `mode` | `soon`, `brb` or `ending` — see below | `soon` |
 | `show` | small label above the headline | `Moon Boys Podcast` |
 | `headline` | the big text; overrides whatever the mode calls itself | mode's own |
-| `sub` | optional line under the clock | none |
+| `sub` | optional line under the clock | mode's own |
+| `badge` | the small pill above the headline | mode's own |
+| `endline` | the headline once the clock hits zero | mode's own |
+| `endbadge` | the badge once the clock hits zero | mode's own |
+| `pre` | the word before the time (`Starts`, `Back`, `Ends`) | mode's own |
 | `t` | start time, 24h `HH:MM` | `12:30` |
 | `d` | date `YYYY-MM-DD`; blank means today, rolling to tomorrow once 3h past | none |
 | `in` | count down N minutes from page load; overrides `t` and `d` | none |
@@ -64,6 +68,12 @@ does. Setting `sub` yourself replaces the thanks.
 
 Only the words and the colour change — the clock, the video, the sound and the
 timezone behave identically in all three.
+
+**A mode is only a set of defaults for the copy.** Every word on the page can be
+replaced: `badge`, `headline`, `sub`, `pre`, and `endbadge` / `endline` for the
+zero state. `?badge=Live` says Live and keeps saying it — a badge set by hand
+holds at zero unless `endbadge` gives it something else to become. The headline
+behaves the same way.
 
 For a break, `in` is usually what you want: `?mode=brb&in=15` counts down fifteen
 minutes from the moment the page loads, so you don't have to work out the wall
