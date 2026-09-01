@@ -76,7 +76,6 @@
      Two layers - a tight dark edge for letterform contrast, a wide soft one to
      separate the block from whatever is behind it. */
   body.charted #showName,
-  body.charted h1,
   body.charted #startsAt,
   body.charted #sub,
   body.charted .badge{
@@ -152,6 +151,27 @@
     0%,100%{filter:drop-shadow(0 0 20px color-mix(in srgb,var(--accent) 22%,transparent))}
     50%{filter:drop-shadow(0 0 42px color-mix(in srgb,var(--accent) 45%,transparent))}
   }
+  /*
+    The headline is a gradient clipped to the glyphs - the fill IS the
+    background, and `color` is transparent. text-shadow on that paints the dark
+    shadow straight THROUGH the letters, which is why adding one turned the teal
+    headline black. drop-shadow works on the rendered result instead, so the
+    gradient survives and the shadow lands behind it.
+
+    It goes in the keyframes because `breathe` already animates `filter`, and a
+    static filter on the element would simply be overridden by it.
+  */
+  @keyframes breathe-charted{
+    0%,100%{filter:
+      drop-shadow(0 2px 3px rgba(2,4,10,.92))
+      drop-shadow(0 4px 20px rgba(2,4,10,.8))
+      drop-shadow(0 0 20px color-mix(in srgb,var(--accent) 22%,transparent))}
+    50%{filter:
+      drop-shadow(0 2px 3px rgba(2,4,10,.92))
+      drop-shadow(0 4px 20px rgba(2,4,10,.8))
+      drop-shadow(0 0 42px color-mix(in srgb,var(--accent) 45%,transparent))}
+  }
+  body.charted h1{animation-name:breathe-charted}
 
   /* ---------------- clock ---------------- */
   .clock{display:flex;align-items:flex-start;gap:clamp(6px,1.2vw,20px);margin-top:.35em}
