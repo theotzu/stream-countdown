@@ -372,11 +372,6 @@
 
   <div class="field"><label>Accent colour</label><input type="color" id="f_color" value="#7cf2ff"></div>
 
-  <div class="field">
-    <label>Price tape across the top</label>
-    <input type="text" id="f_ticker" placeholder="BTC, ETH, SOL &mdash; or &lsquo;-&rsquo; for none">
-  </div>
-
   <label class="check"><input type="checkbox" id="f_chart"> Live chart instead of the video</label>
   <div class="row">
     <div class="field"><label>Symbol</label><input type="text" id="f_csym" placeholder="BINANCE:BTCUSDT"></div>
@@ -385,7 +380,7 @@
 
   <div class="field">
     <label>Indicators (comma separated)</label>
-    <input type="text" id="f_ind" placeholder="moonboys &mdash; or rsi, macd, volume, ma, boll; &lsquo;-&rsquo; for none">
+    <input type="text" id="f_ind" placeholder="moonboys, volume, macd &mdash; &lsquo;-&rsquo; for none">
   </div>
 
   <label class="check"><input type="checkbox" id="f_audio"> Play the video's audio</label>
@@ -738,7 +733,7 @@ function klines(sym, interval, limit){
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (rows) {
       return rows.map(function (k) {
-        return { t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4] };
+        return { t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] };
       });
     });
 }
@@ -811,6 +806,13 @@ function drawMoonBoys(){
   var padR = 74, padB = 26, padT = 16;
   var plotW = W - padR, plotH = H - padB - padT;
 
+  // MACD gets a pane of its own under the price, the way it is read on any
+  // charting package. Price keeps the rest.
+  var macdH = wantsMacd ? Math.max(64, Math.round(plotH * 0.22)) : 0;
+  var macdGap = wantsMacd ? 12 : 0;
+  var priceH = plotH - macdH - macdGap;
+  var macdTop = padT + priceH + macdGap;
+
   // Never so many that candles become a hairline comb, never more than exist.
   var count = Math.min(MB_BARS, bars.length, Math.max(20, Math.floor(plotW / 2.2)));
   var start = Math.max(0, bars.length - count);
@@ -857,11 +859,29 @@ function drawMoonBoys(){
   lo -= span * 0.06; hi += span * 0.06; span = hi - lo;
 
   g.save();
-  g.beginPath(); g.rect(0, padT, plotW, plotH); g.clip();
+  g.beginPath(); g.rect(0, padT, plotW, priceH); g.clip();
 
   var x = function (i) { return (i / Math.max(view.length - 1, 1)) * (plotW - 18) + 9; };
-  var y = function (v) { return padT + (1 - (v - lo) / span) * plotH; };
+  var y = function (v) { return padT + (1 - (v - lo) / span) * priceH; };
   var step = (plotW - 18) / Math.max(view.length, 1);
+
+  // Volume along the floor of the price pane, quiet enough to stay underneath
+  // the averages it shares the space with.
+  if (wantsVolume) {
+    var vmax = 0;
+    view.forEach(function (b) { if (b.v > vmax) vmax = b.v; });
+    if (vmax > 0) {
+      var volH = priceH * 0.17, volBase = padT + priceH;
+      g.globalAlpha = 0.3;
+      view.forEach(function (b, i) {
+        var h = (b.v / vmax) * volH;
+        g.fillStyle = b.c >= b.o ? MB.up : MB.down;
+        g.fillRect(x(i) - Math.max(1, step * 0.58) / 2, volBase - h,
+                   Math.max(1.2, step * 0.58), h);
+      });
+      g.globalAlpha = 1;
+    }
+  }
 
   // Risk zone first, underneath everything: contiguous stretches below the 200.
   g.fillStyle = 'rgba(255,60,60,.13)';
@@ -871,7 +891,7 @@ function drawMoonBoys(){
     var risk = i < view.length && mac[gi] != null && view[i].c < mac[gi];
     if (risk && runStart === null) runStart = i;
     if (!risk && runStart !== null) {
-      g.fillRect(x(runStart) - step / 2, padT, (i - runStart) * step, plotH);
+      g.fillRect(x(runStart) - step / 2, padT, (i - runStart) * step, priceH);
       runStart = null;
     }
   }
@@ -931,6 +951,59 @@ function drawMoonBoys(){
 
   g.restore();
 
+  // ---- MACD, on the chart's own timeframe ----
+  if (wantsMacd) {
+    var m = macdOf(bars.map(function (b) { return b.c; }));
+    var mlo = Infinity, mhi = -Infinity;
+    for (var i = start; i < bars.length; i++) {
+      [m.line[i], m.signal[i], m.hist[i]].forEach(function (v) {
+        if (v != null) { mlo = Math.min(mlo, v); mhi = Math.max(mhi, v); }
+      });
+    }
+    if (isFinite(mlo) && isFinite(mhi)) {
+      // Zero has to sit at the same place for the line and the bars, so the pane
+      // is scaled symmetrically around it rather than to whatever it contains.
+      var mmax = Math.max(Math.abs(mlo), Math.abs(mhi)) || 1;
+      var my = function (v) { return macdTop + macdH / 2 - (v / mmax) * (macdH / 2 - 4); };
+
+      g.save();
+      g.beginPath(); g.rect(0, macdTop, plotW, macdH); g.clip();
+
+      g.strokeStyle = 'rgba(255,255,255,.10)'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, my(0)); g.lineTo(plotW, my(0)); g.stroke();
+
+      view.forEach(function (_, i) {
+        var h = m.hist[start + i];
+        if (h == null) return;
+        g.fillStyle = h >= 0 ? MB.up : MB.down;
+        g.globalAlpha = 0.5;
+        var top = Math.min(my(h), my(0)), hgt = Math.abs(my(h) - my(0));
+        g.fillRect(x(i) - Math.max(1, step * 0.58) / 2, top,
+                   Math.max(1.2, step * 0.58), Math.max(1, hgt));
+        g.globalAlpha = 1;
+      });
+
+      [['line', MB.gold, 1.8], ['signal', MB.blue, 1.5]].forEach(function (spec) {
+        var arr = m[spec[0]];
+        g.strokeStyle = spec[1]; g.lineWidth = spec[2];
+        g.beginPath();
+        var began = false;
+        view.forEach(function (_, i) {
+          var v = arr[start + i];
+          if (v == null) return;
+          if (!began) { g.moveTo(x(i), my(v)); began = true; } else g.lineTo(x(i), my(v));
+        });
+        g.stroke();
+      });
+      g.restore();
+
+      g.font = '11px -apple-system, system-ui, sans-serif';
+      g.textBaseline = 'alphabetic';
+      g.fillStyle = 'rgba(234,246,255,.5)';
+      g.fillText('MACD 12/26/9', 14, macdTop + 13);
+    }
+  }
+
   // Price axis, then the last price called out against its own regime.
   g.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
   g.textBaseline = 'middle';
@@ -957,8 +1030,18 @@ function drawMoonBoys(){
   g.textBaseline = 'alphabetic';
   g.fillStyle = 'rgba(234,246,255,.55)';
   var tf = (TIMEFRAMES.filter(function (t) { return t[0] === C.ci; })[0] || ['', C.ci])[1];
-  g.fillText(binanceSymbol(C.csym) + '  \u00b7  ' + tf +
-             '  \u00b7  MoonBoys Line (daily 44/125/200)', 14, H - 9);
+  var drawn = ['MoonBoys Line (daily 44/125/200)'];
+  if (wantsVolume) drawn.push('Volume');
+  if (wantsMacd) drawn.push('MACD');
+  g.fillText(binanceSymbol(C.csym) + '  \u00b7  ' + tf + '  \u00b7  ' + drawn.join(' + '),
+             14, H - 9);
+  if (notDrawn.length) {
+    // Say so on the chart. A dropped indicator that leaves no trace is the
+    // reason 'moonboys,macd,volume' looked like it was being ignored.
+    g.fillStyle = MB.macro;
+    g.fillText('not available on this chart: ' + notDrawn.join(', '),
+               14, H - 24);
+  }
   g.fillStyle = regimeColour(lastRegime);
   g.fillText(lastRegime === 'bull' ? 'Above the 44 and 125'
            : lastRegime === 'bear' ? 'Below the 44 and 125'
@@ -1131,8 +1214,44 @@ if (!C.transparent && tapeSymbols().length) {
   }, 45000);
 }
 
-var wantsMoonBoys = String(C.ind).toLowerCase().split(',')
-  .map(function (n) { return n.trim(); }).indexOf('moonboys') >= 0;
+/* What was asked for, and what this renderer can honour. Anything it cannot
+ * draw is NAMED ON THE CHART rather than quietly discarded - asking for
+ * "moonboys,macd,volume" and silently getting only the first is worse than
+ * being told the third is not available here.
+ */
+var NATIVE_INDICATORS = ['moonboys', 'volume', 'macd'];
+var askedFor = String(C.ind).toLowerCase().split(',')
+  .map(function (n) { return n.trim(); }).filter(Boolean);
+var wantsMoonBoys = askedFor.indexOf('moonboys') >= 0;
+var wantsVolume = askedFor.indexOf('volume') >= 0;
+var wantsMacd = askedFor.indexOf('macd') >= 0;
+var notDrawn = askedFor.filter(function (n) { return NATIVE_INDICATORS.indexOf(n) < 0; });
+
+function ema(values, len){
+  var out = new Array(values.length).fill(null), k = 2 / (len + 1), prev = null;
+  for (var i = 0; i < values.length; i++) {
+    var v = values[i];
+    if (v == null) continue;
+    prev = prev == null ? v : v * k + prev * (1 - k);
+    if (i >= len - 1) out[i] = prev;
+  }
+  return out;
+}
+
+/* MACD on the chart's own timeframe, which is where it is conventionally read -
+ * unlike the MoonBoys averages, which are pinned to the daily by design.
+ */
+function macdOf(closes){
+  var f = ema(closes, 12), sl = ema(closes, 26);
+  var line = closes.map(function (_, i) {
+    return (f[i] == null || sl[i] == null) ? null : f[i] - sl[i];
+  });
+  var sig = ema(line.map(function (v) { return v == null ? null : v; }), 9);
+  return { line: line, signal: sig,
+           hist: line.map(function (v, i) {
+             return (v == null || sig[i] == null) ? null : v - sig[i];
+           }) };
+}
 
 if (C.chart && wantsMoonBoys) {
   document.body.classList.add('charted', 'moonboys');
@@ -1385,7 +1504,6 @@ $('f_date').value = C.d ||
   (TARGET.getFullYear() + '-' + pad(TARGET.getMonth() + 1) + '-' + pad(TARGET.getDate()));
 $('f_video').value = C.v;
 $('f_color').value = /^#[0-9a-f]{6}$/i.test(C.c) ? C.c : '#7cf2ff';
-$('f_ticker').value = (C.ticker === DEFAULTS.ticker) ? '' : C.ticker;
 $('f_chart').checked = C.chart;
 $('f_csym').value = (C.csym === DEFAULTS.csym) ? '' : C.csym;
 TIMEFRAMES.forEach(function (tf) {
@@ -1421,7 +1539,9 @@ function buildURL(){
   set('v', videoId($('f_video').value) || $('f_video').value.trim(), DEFAULTS.v);
   set('c', $('f_color').value, DEFAULTS.c);
   if (C.tz !== '') u.set('tz', C.tz);
-  set('ticker', $('f_ticker').value.trim().toUpperCase(), DEFAULTS.ticker);
+  // The tape has no panel control - the top-30 default needs no fiddling - but a
+  // list set by URL still has to survive Copy shareable link.
+  set('ticker', C.ticker, DEFAULTS.ticker);
   if ($('f_chart').checked) {
     u.set('chart', '1');
     set('csym', $('f_csym').value.trim().toUpperCase(), DEFAULTS.csym);

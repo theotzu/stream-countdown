@@ -38,7 +38,7 @@ abbreviation would be right for all of them.
 | `chart=1` | live chart behind the clock instead of the video | off |
 | `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
 | `ci` | timeframe: `1`, `5`, `60`, `1D`, `1W`&hellip; | `1D` |
-| `ind` | indicators, comma separated; `-` for a bare chart | `moonboys` |
+| `ind` | `moonboys`, `volume`, `macd` &mdash; comma separated; `-` for a bare chart | `moonboys` |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `nostars=1` | hide the starfield | off |
 
@@ -93,7 +93,9 @@ A scrolling tape of live prices runs across the top by default, with the
 24-hour move beside each one. Prices come from Binance's public 24hr endpoint -
 keyless, open CORS - and refresh every 45 seconds while the page is visible.
 
-`ticker=BTC,ETH,SOL` picks the symbols and their order. `ticker=-` turns it off,
+`ticker=BTC,ETH,SOL` picks the symbols and their order. There is deliberately no
+panel control for it - the default needs no fiddling - but a list set by URL
+survives Copy shareable link. `ticker=-` turns it off,
 and it never appears in `transparent=1` overlay mode.
 
 Stablecoins are deliberately absent from the default - a tape reporting USDT at
@@ -152,6 +154,16 @@ there while price moves against them. Candles come from `ci`; the averages come
 from a separate daily series, and each displayed bar takes the daily value in
 force at its own timestamp. Computing them on the loaded interval - which this
 did at first - is a different indicator that only happens to match on the daily.
+
+### What else the native chart draws
+
+`ind=moonboys,volume,macd` combines them: volume along the floor of the price
+pane, MACD 12/26/9 in a pane of its own beneath it. MACD reads off the chart's
+own timeframe, the way it normally is - unlike the MoonBoys averages, which stay
+pinned to the daily.
+
+Anything else asked for is **named on the chart** as not available, rather than
+dropped in silence. Only `-` (a bare chart) routes to TradingView's built-ins.
 
 It is a reimplementation, not the Pine script running - worth eyeballing against
 the real chart before trusting it on stream. Any other `ind` value still goes to
