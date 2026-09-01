@@ -1136,24 +1136,55 @@ function loadLogos(){
     .catch(function () { /* no artwork is a cosmetic loss, not a broken tape */ });
 }
 
+/* The tape is built ONCE and then written into.
+ *
+ * Rebuilding innerHTML on every refresh restarts the CSS animation, so a tape
+ * that refreshed every five seconds would snap back to the start every five
+ * seconds - the opposite of always moving. The DOM is created on the first
+ * payload and after that only the numbers are set, which the animation does not
+ * notice at all.
+ */
+var TAPE_BUILT = '';   // the symbol order the current DOM was built for
+
+function tapeItemHTML(r){
+  var logo = LOGOS[r.sym];
+  return '<span class="tape-item" data-sym="' + esc(r.sym) + '">' +
+         (logo ? '<img class="tape-logo" src="' + esc(logo) + '" alt="" ' +
+                 'onerror="this.style.visibility=\'hidden\'">' : '') +
+         '<span class="tape-sym">' + esc(r.sym) + '</span>' +
+         '<span class="tape-px"></span>' +
+         '<span class="tape-ch"></span></span>';
+}
+
 function renderTape(rows){
   var track = document.getElementById('tapeTrack');
   if (!track) return;
-  var html = rows.map(function (r) {
+
+  var order = rows.map(function (r) { return r.sym; }).join(',');
+  if (order !== TAPE_BUILT) {
+    var html = rows.map(tapeItemHTML).join('');
+    track.innerHTML = html + html;          // the second copy is the loop
+    // Constant reading speed whatever the list length, rather than a fixed
+    // duration that sprints with eight symbols and crawls with two.
+    track.style.animationDuration = Math.max(18, rows.length * 5) + 's';
+    TAPE_BUILT = order;
+  }
+
+  rows.forEach(function (r) {
     var up = r.pct >= 0;
-    var logo = LOGOS[r.sym];
-    return '<span class="tape-item">' +
-           (logo ? '<img class="tape-logo" src="' + esc(logo) + '" alt="" ' +
-                   'onerror="this.style.visibility=\'hidden\'">' : '') +
-           '<span class="tape-sym">' + esc(r.sym) + '</span>' +
-           '<span class="tape-px">$' + fmtPrice(r.price) + '</span>' +
-           '<span class="tape-ch ' + (up ? 'up' : 'dn') + '">' +
-           (up ? '\u25b2 ' : '\u25bc ') + Math.abs(r.pct).toFixed(2) + '%</span></span>';
-  }).join('');
-  track.innerHTML = html + html;            // the second copy is the loop
-  // Constant reading speed whatever the list length, rather than a fixed
-  // duration that sprints with eight symbols and crawls with two.
-  track.style.animationDuration = Math.max(18, rows.length * 5) + 's';
+    // Both copies carry the symbol, and both have to say the same thing.
+    var cells = track.querySelectorAll('[data-sym="' + r.sym + '"]');
+    for (var i = 0; i < cells.length; i++) {
+      var px = cells[i].querySelector('.tape-px');
+      var ch = cells[i].querySelector('.tape-ch');
+      if (px) px.textContent = '$' + fmtPrice(r.price);
+      if (ch) {
+        ch.textContent = (up ? '\u25b2 ' : '\u25bc ') + Math.abs(r.pct).toFixed(2) + '%';
+        ch.className = 'tape-ch ' + (up ? 'up' : 'dn');
+      }
+    }
+  });
+
   document.getElementById('tape').hidden = false;
   document.body.classList.add('taped');
 }
@@ -1190,28 +1221,56 @@ function fromGecko(syms){
     .catch(function () { return []; });
 }
 
-function fetchTape(){
-  var syms = tapeSymbols();
-  if (!syms.length) return Promise.resolve();
-  var gecko = syms.filter(function (s) { return GECKO_IDS[s]; });
-  var binance = syms.filter(function (s) { return !GECKO_IDS[s]; });
+/* Both sources write into one store, so a slow source never removes the rows a
+ * fast one just refreshed.
+ */
+var TAPE_ROWS = {};
 
-  // One source being down thins the tape; it never blanks it.
-  return Promise.all([fromBinance(binance), fromGecko(gecko)])
-    .then(function (parts) {
-      var out = parts[0].concat(parts[1])
-        .filter(function (r) { return r && isFinite(r.price); });
-      // Show them in the order they were asked for, not the order they returned.
-      out.sort(function (a, b) { return syms.indexOf(a.sym) - syms.indexOf(b.sym); });
-      if (out.length) renderTape(out);
-    });
+function paintTape(){
+  var syms = tapeSymbols();
+  var out = syms.map(function (sy) { return TAPE_ROWS[sy]; })
+                .filter(function (r) { return r && isFinite(r.price); });
+  if (out.length) renderTape(out);
+}
+
+function absorb(rows){
+  rows.forEach(function (r) { if (r && isFinite(r.price)) TAPE_ROWS[r.sym] = r; });
+  paintTape();
+}
+
+/* THE TWO SOURCES ARE POLLED AT DIFFERENT RATES, on purpose.
+ *
+ * Binance is asked every 5 seconds: 31 symbols in one call is 40 weight, so
+ * twelve calls a minute is 480 against a 6000/min ceiling - comfortable.
+ *
+ * CoinGecko's free tier is a fraction of that, and hammering it earns a 429
+ * that would freeze HYPE, TON and BSV on stale numbers. Those three move on a
+ * slower timer, which nobody can see: what reads as "always moving" is the
+ * whole tape ticking, not any one asset ticking at a particular rate.
+ */
+var TAPE_MS = 5000;
+var TAPE_GECKO_MS = 20000;
+
+function pollBinance(){
+  var syms = tapeSymbols().filter(function (sy) { return !GECKO_IDS[sy]; });
+  return fromBinance(syms).then(absorb);
+}
+function pollGecko(){
+  var syms = tapeSymbols().filter(function (sy) { return GECKO_IDS[sy]; });
+  return fromGecko(syms).then(absorb);
 }
 
 if (!C.transparent && tapeSymbols().length) {
-  loadLogos().then(fetchTape);
+  loadLogos().then(function () {
+    pollBinance();
+    pollGecko();
+  });
   setInterval(function () {
-    if (document.visibilityState === 'visible') fetchTape();
-  }, 45000);
+    if (document.visibilityState === 'visible') pollBinance();
+  }, TAPE_MS);
+  setInterval(function () {
+    if (document.visibilityState === 'visible') pollGecko();
+  }, TAPE_GECKO_MS);
 }
 
 /* What was asked for, and what this renderer can honour. Anything it cannot

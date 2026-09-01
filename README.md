@@ -91,7 +91,17 @@ and reusing it to say goodbye reads as the opposite of what happened.
 
 A scrolling tape of live prices runs across the top by default, with the
 24-hour move beside each one. Prices come from Binance's public 24hr endpoint -
-keyless, open CORS - and refresh every 45 seconds while the page is visible.
+keyless, open CORS - and refresh **every 5 seconds** while the page is visible.
+
+The tape's DOM is built once and then written into. Rebuilding it would restart
+the CSS animation, so a five-second refresh would snap the scroll back to the
+start every five seconds; only the numbers change, which the animation does not
+notice.
+
+The two sources are polled at different rates on purpose. Binance takes 5s
+happily - 31 symbols is 40 weight per call, 480/min against a 6000/min ceiling.
+CoinGecko's free tier is a fraction of that and would answer a 429, freezing
+HYPE, TON and BSV on stale numbers, so those three move on a 20-second timer.
 
 `ticker=BTC,ETH,SOL` picks the symbols and their order. There is deliberately no
 panel control for it - the default needs no fiddling - but a list set by URL
