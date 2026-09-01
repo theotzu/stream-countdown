@@ -723,11 +723,15 @@ function drawMoonBoys(){
   // chart the 200 can be 13% away, and fitting it crushes an hour of price into
   // a hairline at the top of the screen.
   //
-  // So price action is guaranteed a floor share of the height. Averages are
-  // included while they fit inside that, and simply run off the edge when they
-  // do not: an average you cannot see beats candles you cannot read, and the
-  // state readout says where price stands regardless.
-  var PRICE_MIN_SHARE = 0.42;
+  // The averages win. An indicator you cannot see is not an indicator, and on a
+  // lower timeframe the daily 200 is often far from price - BTC sits ~18% above
+  // it as this is written - so a scale that favours the candles crops the lines
+  // straight off the screen.
+  //
+  // So everything fits, and this floor only catches the pathological case where
+  // price would be squeezed into a line: then, and only then, the furthest
+  // average is allowed off the edge.
+  var PRICE_MIN_SHARE = 0.14;
   var plo = Infinity, phi = -Infinity;
   for (var i = start; i < bars.length; i++) {
     plo = Math.min(plo, bars[i].l); phi = Math.max(phi, bars[i].h);
