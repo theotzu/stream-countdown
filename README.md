@@ -91,12 +91,15 @@ the free embed quietly serves 1-minute candles instead of saying so.
 
 ### The MoonBoys Line
 
-`ind=moonboys` does not go through TradingView at all - it draws the indicator
-natively on a canvas from Binance's public candles:
+**`chart=1` draws it by default** - the chart is there to carry the indicator, so
+it should not need asking for twice:
 
 ```
-/?chart=1&ind=moonboys&ci=1D&audio=1
+/?chart=1&ci=1D&audio=1
 ```
+
+It does not go through TradingView at all; it is drawn natively on a canvas from
+Binance's public candles. `ind=-` gives a bare chart with nothing on it.
 
 TradingView's free widget loads **built-in studies only**. Verified side by side:
 `studies=RSI@tv-basicstudies` renders an RSI pane, `studies=PUB;5xZSUQ3b` renders

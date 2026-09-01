@@ -282,7 +282,7 @@
 
   <div class="field">
     <label>Indicators (comma separated)</label>
-    <input type="text" id="f_ind" placeholder="moonboys, rsi, macd, volume, ma, boll">
+    <input type="text" id="f_ind" placeholder="moonboys &mdash; or rsi, macd, volume, ma, boll; &lsquo;-&rsquo; for none">
   </div>
 
   <label class="check"><input type="checkbox" id="f_audio"> Play the video's audio</label>
@@ -336,7 +336,7 @@ var DEFAULTS = {
   chart: false,             // live chart instead of the video picture
   csym: 'BINANCE:BTCUSDT',  // what to chart
   ci: '1D',                 // TradingView interval: 1, 60, 1D, 1W ...
-  ind: '',                  // indicators, comma separated
+  ind: 'moonboys',          // indicators, comma separated; '-' for a bare chart
   transparent: false,
   nostars: false
 };
@@ -761,6 +761,9 @@ function drawMoonBoys(){
   }
 }
 
+// The chart exists to carry the indicator, so chart=1 shows it by default.
+// ind=- is the way to ask for a bare chart with nothing drawn on it.
+if (String(C.ind).trim() === '-') C.ind = '';
 var wantsMoonBoys = String(C.ind).toLowerCase().split(',')
   .map(function (n) { return n.trim(); }).indexOf('moonboys') >= 0;
 
