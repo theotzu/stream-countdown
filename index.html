@@ -1008,14 +1008,27 @@ function loadLogos(){
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(take)
     .then(function () {
-      // Whatever the cap ranking missed, ask for by name - TON sits outside the
+      // Whatever the cap ranking missed, ask for by id - TON sits outside the
       // top 250 and would otherwise be the one coin with no artwork.
-      var gaps = syms.filter(function (x) { return !LOGOS[x] && GECKO_IDS[x]; })
-                     .map(function (x) { return GECKO_IDS[x]; });
+      //
+      // These are keyed by the symbol WE asked for, not the one that comes
+      // back. CoinGecko renamed the-open-network, which now answers with
+      // symbol 'gram' - filing the logo under GRAM left the TON slot empty
+      // while looking like the lookup had worked.
+      var gaps = syms.filter(function (x) { return !LOGOS[x] && GECKO_IDS[x]; });
       if (!gaps.length) return;
-      return fetch(base + '&ids=' + encodeURIComponent(gaps.join(',')), { cache: 'force-cache' })
+      var byId = {};
+      gaps.forEach(function (x) { byId[GECKO_IDS[x]] = x; });
+      return fetch(base + '&ids=' + encodeURIComponent(gaps.map(function (x) {
+          return GECKO_IDS[x];
+        }).join(',')), { cache: 'force-cache' })
         .then(function (r) { return r.ok ? r.json() : []; })
-        .then(take);
+        .then(function (list) {
+          list.forEach(function (c) {
+            var want = byId[c.id];
+            if (want && c.image) LOGOS[want] = c.image;
+          });
+        });
     })
     .catch(function () { /* no artwork is a cosmetic loss, not a broken tape */ });
 }
@@ -1027,7 +1040,7 @@ function renderTape(rows){
     var up = r.pct >= 0;
     var logo = LOGOS[r.sym];
     return '<span class="tape-item">' +
-           (logo ? '<img class="tape-logo" src="' + esc(logo) + '" alt="" loading="lazy" ' +
+           (logo ? '<img class="tape-logo" src="' + esc(logo) + '" alt="" ' +
                    'onerror="this.style.visibility=\'hidden\'">' : '') +
            '<span class="tape-sym">' + esc(r.sym) + '</span>' +
            '<span class="tape-px">$' + fmtPrice(r.price) + '</span>' +
