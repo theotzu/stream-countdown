@@ -34,6 +34,9 @@ fixed offset you pinned (`UTC-5`), because one offset spans several zones and no
 abbreviation would be right for all of them.
 | `audio=1` | play the video's sound, not just its picture | off |
 | `vol` | volume `0`-`100`, with `audio=1` | `70` |
+| `twitch` | twitch channel whose chat emotes fly up the screen | none |
+| `kick` | kick channel slug, same | none |
+| `emoji=0` | ignore plain unicode emoji, platform emotes only | on |
 | `ticker` | symbols for the price tape across the top; `-` for none | ~top 30, no stablecoins |
 | `chart=1` | live chart behind the clock instead of the video | off |
 | `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
@@ -86,6 +89,29 @@ and the clock comes back.
 
 Ending closes amber rather than red, because red is the "we are on air" colour
 and reusing it to say goodbye reads as the opposite of what happened.
+
+## The emote wall
+
+Emotes posted in chat fly up the screen.
+
+```
+/?twitch=yourchannel&kick=your-slug
+```
+
+Both are read **anonymously** — no token, no account, no server of ours in
+between. Twitch is IRC over WebSocket joined as `justinfan<random>`, a read-only
+guest session they support on purpose; the `twitch.tv/tags` capability is what
+makes emotes identifiable. Kick is Pusher on `chatrooms.<id>.v2`, with the id
+from their channel API, which reflects the page's origin back so the browser is
+allowed to ask. Both were verified against live chat before this was written.
+
+Plain unicode emoji fly too; `emoji=0` limits it to real platform emotes. At
+most 44 are on screen at once, so a raid cannot melt the page, and either socket
+reconnects on its own with backoff — a stream outlasts any single connection.
+
+**Pump.fun is not supported.** Its public API answers 530 and its chat sits
+behind a login, so there is no anonymous read to make. Rather than half-support
+it, nothing pretends to watch it.
 
 ## The price tape
 

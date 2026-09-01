@@ -63,6 +63,25 @@
   body.transparent #tape{display:none}
   @media (prefers-reduced-motion: reduce){ #tapeTrack{animation:none} }
 
+  /* The emote wall. Above everything, touching nothing - it must never take a
+     click away from the settings panel underneath it. */
+  #emotes{position:fixed;inset:0;z-index:8;pointer-events:none;overflow:hidden}
+  .emote{
+    position:absolute;bottom:-80px;
+    width:56px;height:56px;line-height:56px;font-size:46px;text-align:center;
+    will-change:transform,opacity;
+    animation:emote-rise linear forwards;
+    filter:drop-shadow(0 3px 8px rgba(2,4,10,.55));
+  }
+  .emote img{width:100%;height:100%;object-fit:contain}
+  @keyframes emote-rise{
+    0%{transform:translateY(0) scale(.7);opacity:0}
+    12%{transform:translateY(-12vh) scale(1);opacity:1}
+    80%{opacity:1}
+    100%{transform:translateY(-108vh) translateX(var(--drift,0px)) scale(1);opacity:0}
+  }
+  @media (prefers-reduced-motion: reduce){ #emotes{display:none} }
+
   #mb{position:fixed;inset:0;z-index:0;display:none}
   body.moonboys #mb{display:block}
   #chart{position:fixed;inset:0;z-index:0;overflow:hidden}
@@ -301,6 +320,8 @@
 </head>
 <body>
 
+<div id="emotes" aria-hidden="true"></div>
+
 <div id="tape" hidden aria-label="Live prices"><div id="tapeTrack"></div></div>
 
 <canvas id="mb"></canvas>
@@ -437,6 +458,9 @@ var DEFAULTS = {
   vol: '70',                // 0-100, only meaningful with audio=1
   // Roughly the top 30 by cap, stablecoins deliberately absent - a tape that
   // reports USDT at $1.00 all day is wasting the space.
+  twitch: '',               // twitch channel to watch for emotes
+  kick: '',                 // kick channel slug, same
+  emoji: '1',               // '0' to ignore plain unicode emoji
   ticker: 'BTC,ETH,XRP,BNB,SOL,DOGE,ADA,TRX,LINK,AVAX,SUI,XLM,HBAR,BCH,LTC,' +
           'DOT,HYPE,TON,SHIB,UNI,PEPE,NEAR,APT,ICP,ETC,POL,ARB,OP,ATOM,AAVE,BSV',
   chart: false,             // live chart instead of the video picture
@@ -662,6 +686,164 @@ $('badgeText').textContent = BADGE;
  * frame it, this one included. For real aggr, layer it in OBS as its own
  * Browser Source above this one; see the README.
  */
+/* ---------------- the emote wall ----------------
+ *
+ * Emotes posted in chat fly up the screen. Both platforms are read ANONYMOUSLY,
+ * with no token and no server of ours in between:
+ *
+ *   Twitch  IRC over WebSocket. Connecting as justinfan<random> is a read-only
+ *           guest session Twitch supports on purpose. Requesting the tags
+ *           capability is what makes emotes identifiable - the emotes= tag
+ *           carries their ids and character positions.
+ *   Kick    Pusher, the same public app key their own web client uses, on
+ *           chatrooms.<id>.v2. The id comes from their channel API, which
+ *           reflects the page's origin back in Access-Control-Allow-Origin, so
+ *           the browser is allowed to ask.
+ *
+ * Verified against live chat before this was written, rather than assumed.
+ *
+ * Pump.fun is NOT here: its public API answered 530 and its chat sits behind a
+ * login, so there is no anonymous read to make. Nothing silently pretends to
+ * watch it.
+ */
+var EMOTE_MAX = 44;          // on screen at once, so a raid cannot melt the page
+var EMOJI_RE = /\p{Extended_Pictographic}/gu;
+
+function spawnEmote(kind, value){
+  var wall = document.getElementById('emotes');
+  if (!wall || wall.childElementCount >= EMOTE_MAX) return;
+  var el = document.createElement('div');
+  el.className = 'emote';
+  if (kind === 'img') {
+    var img = document.createElement('img');
+    img.src = value;
+    img.alt = '';
+    // A dead emote URL must not leave an empty box drifting up the screen.
+    img.onerror = function () { el.remove(); };
+    el.appendChild(img);
+  } else {
+    el.textContent = value;
+  }
+  el.style.left = (Math.random() * 92 + 2) + 'vw';
+  el.style.setProperty('--drift', Math.round((Math.random() - 0.5) * 160) + 'px');
+  el.style.animationDuration = (5.5 + Math.random() * 3.5).toFixed(2) + 's';
+  el.addEventListener('animationend', function () { el.remove(); });
+  wall.appendChild(el);
+}
+
+function spawnEmoji(text){
+  if (C.emoji === '0') return;
+  var found = String(text).match(EMOJI_RE);
+  if (!found) return;
+  found.slice(0, 6).forEach(function (ch) { spawnEmote('text', ch); });
+}
+
+/* Twitch ------------------------------------------------------------------ */
+function watchTwitch(channel){
+  var chan = String(channel).toLowerCase().replace(/[^a-z0-9_]/g, '');
+  if (!chan) return;
+  var ws, retry = 2000;
+
+  function connect(){
+    ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+    ws.onopen = function () {
+      retry = 2000;
+      ws.send('CAP REQ :twitch.tv/tags');
+      ws.send('NICK justinfan' + (Math.floor(Math.random() * 90000) + 10000));
+      ws.send('JOIN #' + chan);
+    };
+    ws.onmessage = function (e) {
+      String(e.data).split('\r\n').forEach(function (line) {
+        if (!line) return;
+        // Twitch drops the connection if PINGs go unanswered.
+        if (line.indexOf('PING') === 0) { ws.send('PONG :tmi.twitch.tv'); return; }
+        if (line.indexOf('PRIVMSG') < 0) return;
+
+        var tags = {};
+        if (line[0] === '@') {
+          line.slice(1, line.indexOf(' ')).split(';').forEach(function (kv) {
+            var i = kv.indexOf('=');
+            tags[kv.slice(0, i)] = kv.slice(i + 1);
+          });
+        }
+        var body = line.slice(line.indexOf(' :', line.indexOf('PRIVMSG')) + 2);
+
+        // emotes=<id>:<s>-<e>,<s>-<e>/<id>:<s>-<e>
+        if (tags.emotes) {
+          tags.emotes.split('/').forEach(function (part) {
+            var id = part.split(':')[0];
+            if (!id) return;
+            var hits = (part.split(':')[1] || '').split(',').length;
+            for (var n = 0; n < Math.min(hits, 4); n++) {
+              spawnEmote('img',
+                'https://static-cdn.jtvnw.net/emoticons/v2/' + encodeURIComponent(id) +
+                '/default/dark/2.0');
+            }
+          });
+        }
+        spawnEmoji(body);
+      });
+    };
+    ws.onclose = function () {
+      // A stream can outlast any single socket, so it always comes back.
+      setTimeout(connect, retry);
+      retry = Math.min(retry * 2, 30000);
+    };
+    ws.onerror = function () { try { ws.close(); } catch (err) {} };
+  }
+  connect();
+}
+
+/* Kick -------------------------------------------------------------------- */
+function watchKick(slug){
+  var name = String(slug).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  if (!name) return;
+
+  fetch('https://kick.com/api/v2/channels/' + encodeURIComponent(name))
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (d) {
+      var id = d && d.chatroom && d.chatroom.id;
+      if (!id) return;
+      var ws, retry = 2000;
+
+      function connect(){
+        ws = new WebSocket('wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679' +
+                           '?protocol=7&client=js&version=8.4.0-rc2&flash=false');
+        ws.onopen = function () {
+          retry = 2000;
+          ws.send(JSON.stringify({ event: 'pusher:subscribe',
+                                   data: { auth: '', channel: 'chatrooms.' + id + '.v2' } }));
+        };
+        ws.onmessage = function (e) {
+          var frame;
+          try { frame = JSON.parse(e.data); } catch (err) { return; }
+          if (!frame || String(frame.event).indexOf('ChatMessage') < 0) return;
+          var payload;
+          try { payload = JSON.parse(frame.data); } catch (err) { return; }
+          var content = (payload && payload.content) || '';
+
+          // Kick writes its emotes inline as [emote:<id>:<name>].
+          var re = /\[emote:(\d+):[^\]]*\]/g, m, n = 0;
+          while ((m = re.exec(content)) && n < 6) {
+            spawnEmote('img', 'https://files.kick.com/emotes/' + m[1] + '/fullsize');
+            n++;
+          }
+          spawnEmoji(content.replace(re, ''));
+        };
+        ws.onclose = function () {
+          setTimeout(connect, retry);
+          retry = Math.min(retry * 2, 30000);
+        };
+        ws.onerror = function () { try { ws.close(); } catch (err) {} };
+      }
+      connect();
+    })
+    .catch(function () { /* a wrong slug is quiet, not fatal */ });
+}
+
+if (C.twitch) watchTwitch(C.twitch);
+if (C.kick) watchKick(C.kick);
+
 /* ---------------- MoonBoys Line ----------------
  *
  * Theo's own published indicator, drawn here rather than embedded. TradingView's
