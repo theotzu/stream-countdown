@@ -387,7 +387,10 @@ var DEFAULTS = {
   tz: '',                   // '' = each viewer's local time; e.g. '-5' = fixed UTC-5
   audio: false,             // play the YouTube audio as well as the picture
   vol: '70',                // 0-100, only meaningful with audio=1
-  ticker: 'BTC,ETH,SOL,XRP,DOGE,LINK,AVAX,ADA',  // scrolling tape; '-' for none
+  // Roughly the top 30 by cap, stablecoins deliberately absent - a tape that
+  // reports USDT at $1.00 all day is wasting the space.
+  ticker: 'BTC,ETH,XRP,BNB,SOL,DOGE,ADA,TRX,LINK,AVAX,SUI,XLM,HBAR,BCH,LTC,' +
+          'DOT,HYPE,TON,SHIB,UNI,PEPE,NEAR,APT,ICP,ETC,POL,ARB,OP,ATOM,AAVE,BSV',
   chart: false,             // live chart instead of the video picture
   csym: 'BINANCE:BTCUSDT',  // what to chart
   ci: '1D',                 // TradingView interval: 1, 60, 1D, 1W ...
@@ -931,8 +934,18 @@ function tapeSymbols(){
   if (!raw || raw === '-' || raw === '0') return [];
   return raw.split(',').map(function (n) {
     return n.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  }).filter(Boolean).slice(0, 20);
+  }).filter(Boolean).slice(0, 40);
 }
+
+/* Binance does not list everything. HYPE, TON and BSV have no USDT pair there -
+ * checked against exchangeInfo, not assumed - so they come from CoinGecko,
+ * which is also keyless and CORS-open. Anything not named here goes to Binance.
+ */
+var GECKO_IDS = {
+  HYPE: 'hyperliquid',
+  TON: 'the-open-network',
+  BSV: 'bitcoin-cash-sv'
+};
 
 function fmtPrice(n){
   var digits = n >= 1000 ? 0 : n >= 1 ? 2 : n >= 0.01 ? 4 : 6;
@@ -958,27 +971,53 @@ function renderTape(rows){
   document.body.classList.add('taped');
 }
 
+function fromBinance(syms){
+  if (!syms.length) return Promise.resolve([]);
+  var pairs = syms.map(function (s) { return s + 'USDT'; });
+  return fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=' +
+               encodeURIComponent(JSON.stringify(pairs)), { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (rows) {
+      return rows.map(function (r) {
+        return { sym: r.symbol.replace(/USDT$/, ''),
+                 price: parseFloat(r.lastPrice),
+                 pct: parseFloat(r.priceChangePercent) };
+      });
+    })
+    .catch(function () { return []; });
+}
+
+function fromGecko(syms){
+  if (!syms.length) return Promise.resolve([]);
+  var ids = syms.map(function (s) { return GECKO_IDS[s]; });
+  return fetch('https://api.coingecko.com/api/v3/simple/price?ids=' +
+               encodeURIComponent(ids.join(',')) +
+               '&vs_currencies=usd&include_24hr_change=true', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (d) {
+      return syms.map(function (s) {
+        var row = d[GECKO_IDS[s]];
+        return row ? { sym: s, price: row.usd, pct: row.usd_24h_change } : null;
+      }).filter(Boolean);
+    })
+    .catch(function () { return []; });
+}
+
 function fetchTape(){
   var syms = tapeSymbols();
   if (!syms.length) return Promise.resolve();
-  var pairs = syms.map(function (s) { return /USD[TC]?$/.test(s) ? s : s + 'USDT'; });
-  var url = 'https://api.binance.com/api/v3/ticker/24hr?symbols=' +
-            encodeURIComponent(JSON.stringify(pairs));
-  return fetch(url, { cache: 'no-store' })
-    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-    .then(function (rows) {
-      var out = rows.map(function (r) {
-        return {
-          sym: r.symbol.replace(/USD[TC]?$/, ''),
-          price: parseFloat(r.lastPrice),
-          pct: parseFloat(r.priceChangePercent)
-        };
-      }).filter(function (r) { return isFinite(r.price); });
-      // Keep the order that was asked for; Binance returns its own.
+  var gecko = syms.filter(function (s) { return GECKO_IDS[s]; });
+  var binance = syms.filter(function (s) { return !GECKO_IDS[s]; });
+
+  // One source being down thins the tape; it never blanks it.
+  return Promise.all([fromBinance(binance), fromGecko(gecko)])
+    .then(function (parts) {
+      var out = parts[0].concat(parts[1])
+        .filter(function (r) { return r && isFinite(r.price); });
+      // Show them in the order they were asked for, not the order they returned.
       out.sort(function (a, b) { return syms.indexOf(a.sym) - syms.indexOf(b.sym); });
       if (out.length) renderTape(out);
-    })
-    .catch(function () { /* a dead tape just stays as it was, or never appears */ });
+    });
 }
 
 if (!C.transparent && tapeSymbols().length) {

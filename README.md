@@ -34,7 +34,7 @@ fixed offset you pinned (`UTC-5`), because one offset spans several zones and no
 abbreviation would be right for all of them.
 | `audio=1` | play the video's sound, not just its picture | off |
 | `vol` | volume `0`-`100`, with `audio=1` | `70` |
-| `ticker` | symbols for the price tape across the top; `-` for none | `BTC,ETH,SOL,XRP,DOGE,LINK,AVAX,ADA` |
+| `ticker` | symbols for the price tape across the top; `-` for none | ~top 30, no stablecoins |
 | `chart=1` | live chart behind the clock instead of the video | off |
 | `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
 | `ci` | timeframe: `1`, `5`, `60`, `1D`, `1W`&hellip; | `1D` |
@@ -95,6 +95,15 @@ keyless, open CORS - and refresh every 45 seconds while the page is visible.
 
 `ticker=BTC,ETH,SOL` picks the symbols and their order. `ticker=-` turns it off,
 and it never appears in `transparent=1` overlay mode.
+
+Stablecoins are deliberately absent from the default - a tape reporting USDT at
+$1.00 all day wastes the space.
+
+**Binance does not list everything.** HYPE, TON and BSV have no USDT pair there
+(checked against `exchangeInfo`, not assumed), so those come from CoinGecko,
+which is also keyless and CORS-open. Add a symbol Binance lacks and it will
+simply not appear unless it is mapped in `GECKO_IDS`. One source being down
+thins the tape rather than blanking it.
 
 ## Putting a market on the screen
 
