@@ -89,7 +89,34 @@ Defaults to BTC on the daily. `csym` and `ci` change that.
 Sub-minute intervals are not offered: seconds are a paid TradingView feature and
 the free embed quietly serves 1-minute candles instead of saying so.
 
-### Why this is TradingView and not aggr
+### The MoonBoys Line
+
+`ind=moonboys` does not go through TradingView at all - it draws the indicator
+natively on a canvas from Binance's public candles:
+
+```
+/?chart=1&ind=moonboys&ci=1D&audio=1
+```
+
+TradingView's free widget loads **built-in studies only**. Verified side by side:
+`studies=RSI@tv-basicstudies` renders an RSI pane, `studies=PUB;5xZSUQ3b` renders
+a clean chart with no indicator on it. Published Pine scripts need TradingView's
+licensed Charting Library, so the only way to get this on the page was to draw it.
+
+The rules, from the script's own description:
+
+| state | condition | colour |
+| --- | --- | --- |
+| bullish | above **both** the 44 and 125 SMA | gold |
+| bearish | below **both** the 44 and 125 SMA | blue |
+| chop | between the 44 and the 125 | grey |
+| risk zone | below the 200 SMA | red background |
+
+It is a reimplementation, not the Pine script running - worth eyeballing against
+the real chart before trusting it on stream. Any other `ind` value still goes to
+TradingView, where only built-in studies work.
+
+### Why the chart is TradingView and not aggr
 
 **aggr.trade cannot be embedded.** It serves `X-Frame-Options: DENY` and
 `Content-Security-Policy: frame-ancestors 'self' *.aggr.trade`, so no page

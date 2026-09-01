@@ -23,6 +23,8 @@
   body.transparent{background:transparent}
 
   /* ---------------- background ---------------- */
+  #mb{position:fixed;inset:0;z-index:0;display:none}
+  body.moonboys #mb{display:block}
   #chart{position:fixed;inset:0;z-index:0;overflow:hidden}
   #chart iframe{width:100%;height:100%;border:0}
   /* A chart is there to be read, so it does not get the full cinematic murk a
@@ -48,7 +50,7 @@
       linear-gradient(180deg, rgba(4,6,15,.70) 0%, rgba(4,6,15,0) 26%, rgba(4,6,15,0) 68%, rgba(4,6,15,.88) 100%);
   }
   body.transparent #bg,body.transparent #scrim,body.transparent #stars,
-  body.transparent #chart{display:none}
+  body.transparent #chart,body.transparent #mb{display:none}
 
   /* ---------------- content ---------------- */
   main{
@@ -212,6 +214,7 @@
 </head>
 <body>
 
+<canvas id="mb"></canvas>
 <div id="chart"></div>
 <div id="bg"></div>
 <canvas id="stars"></canvas>
@@ -535,7 +538,240 @@ $('badgeText').textContent = MODE.badge;
  * frame it, this one included. For real aggr, layer it in OBS as its own
  * Browser Source above this one; see the README.
  */
-if (C.chart) {
+/* ---------------- MoonBoys Line ----------------
+ *
+ * Theo's own published indicator, drawn here rather than embedded. TradingView's
+ * free widget loads built-in studies only - RSI renders, a published Pine script
+ * does not, verified side by side - so the only way to get this on the page was
+ * to draw it.
+ *
+ * The rules, from the script's own description:
+ *   SMA 44 (fast), SMA 125 (slow), SMA 200 (macro baseline)
+ *   above BOTH 44 and 125          -> bullish, gold
+ *   below BOTH 44 and 125          -> bearish, blue
+ *   between the two                -> chop, grey
+ *   below the 200                  -> risk zone, red background
+ *
+ * Candles come from Binance's public REST endpoint, which is keyless and sends
+ * Access-Control-Allow-Origin: *, so the page can call it directly.
+ */
+var TF_TO_BINANCE = {
+  '1':'1m','3':'3m','5':'5m','15':'15m','30':'30m',
+  '60':'1h','120':'2h','240':'4h','1D':'1d','1W':'1w','1M':'1M'
+};
+var MB = {
+  gold: '#f5b642', blue: '#4a8fe7', grey: '#7a828f',
+  macro: '#ff5f5f', up: '#3ddc97', down: '#ff7a7a'
+};
+
+function binanceSymbol(sym){
+  var s = String(sym);
+  if (s.indexOf(':') >= 0) s = s.slice(s.indexOf(':') + 1);
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function sma(values, len){
+  var out = new Array(values.length).fill(null), run = 0;
+  for (var i = 0; i < values.length; i++) {
+    run += values[i];
+    if (i >= len) run -= values[i - len];
+    if (i >= len - 1) out[i] = run / len;
+  }
+  return out;
+}
+
+function regimeOf(close, f, sl){
+  if (f == null || sl == null) return null;
+  if (close > f && close > sl) return 'bull';
+  if (close < f && close < sl) return 'bear';
+  return 'chop';
+}
+function regimeColour(r){
+  return r === 'bull' ? MB.gold : r === 'bear' ? MB.blue : MB.grey;
+}
+
+var MBSTATE = { bars: [], failed: false };
+
+function fetchMoonBoys(){
+  var sym = binanceSymbol(C.csym);
+  var iv = TF_TO_BINANCE[C.ci] || '1d';
+  // 200 bars of history are consumed by the slowest average before the first
+  // point can even be drawn, so ask for the window plus that runway.
+  var url = 'https://api.binance.com/api/v3/klines?symbol=' + encodeURIComponent(sym) +
+            '&interval=' + iv + '&limit=520';
+  return fetch(url, { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (rows) {
+      MBSTATE.bars = rows.map(function (k) {
+        return { t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4] };
+      });
+      MBSTATE.failed = false;
+      drawMoonBoys();
+    })
+    .catch(function () {
+      MBSTATE.failed = true;
+      drawMoonBoys();
+    });
+}
+
+function drawMoonBoys(){
+  var cv = document.getElementById('mb');
+  if (!cv) return;
+  var dpr = Math.min(devicePixelRatio || 1, 2);
+  var W = innerWidth, H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  var g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+
+  var bars = MBSTATE.bars;
+  if (!bars.length) {
+    g.fillStyle = 'rgba(234,246,255,.35)';
+    g.font = '13px -apple-system, system-ui, sans-serif';
+    g.fillText(MBSTATE.failed ? 'Chart data unavailable' : 'Loading chart\u2026', 24, 34);
+    return;
+  }
+
+  var closes = bars.map(function (b) { return b.c; });
+  var f = sma(closes, 44), sl = sma(closes, 125), mac = sma(closes, 200);
+
+  var padR = 74, padB = 26, padT = 16;
+  var plotW = W - padR, plotH = H - padB - padT;
+
+  // Enough candles to read at a glance without turning into a hairline comb.
+  var count = Math.max(50, Math.min(240, Math.floor(plotW / 8)));
+  var start = Math.max(0, bars.length - count);
+  var view = bars.slice(start);
+
+  var lo = Infinity, hi = -Infinity;
+  for (var i = start; i < bars.length; i++) {
+    lo = Math.min(lo, bars[i].l); hi = Math.max(hi, bars[i].h);
+    [f[i], sl[i], mac[i]].forEach(function (v) {
+      if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    });
+  }
+  var span = (hi - lo) || 1;
+  lo -= span * 0.06; hi += span * 0.06; span = hi - lo;
+
+  var x = function (i) { return (i / Math.max(view.length - 1, 1)) * (plotW - 18) + 9; };
+  var y = function (v) { return padT + (1 - (v - lo) / span) * plotH; };
+  var step = (plotW - 18) / Math.max(view.length, 1);
+
+  // Risk zone first, underneath everything: contiguous stretches below the 200.
+  g.fillStyle = 'rgba(255,60,60,.13)';
+  var runStart = null;
+  for (var i = 0; i <= view.length; i++) {
+    var gi = start + i;
+    var risk = i < view.length && mac[gi] != null && view[i].c < mac[gi];
+    if (risk && runStart === null) runStart = i;
+    if (!risk && runStart !== null) {
+      g.fillRect(x(runStart) - step / 2, padT, (i - runStart) * step, plotH);
+      runStart = null;
+    }
+  }
+
+  // The band between the fast and slow averages, tinted by that bar's regime.
+  for (var i = 0; i < view.length - 1; i++) {
+    var gi = start + i;
+    if (f[gi] == null || sl[gi] == null || f[gi + 1] == null || sl[gi + 1] == null) continue;
+    var r = regimeOf(view[i].c, f[gi], sl[gi]);
+    g.fillStyle = regimeColour(r);
+    g.globalAlpha = 0.16;
+    g.beginPath();
+    g.moveTo(x(i), y(f[gi]));
+    g.lineTo(x(i + 1), y(f[gi + 1]));
+    g.lineTo(x(i + 1), y(sl[gi + 1]));
+    g.lineTo(x(i), y(sl[gi]));
+    g.closePath(); g.fill();
+    g.globalAlpha = 1;
+  }
+
+  // Candles, kept quiet so the averages stay the loudest thing on screen.
+  var cw = Math.max(1.5, step * 0.58);
+  for (var i = 0; i < view.length; i++) {
+    var b = view[i];
+    var col = b.c >= b.o ? MB.up : MB.down;
+    g.globalAlpha = 0.55;
+    g.strokeStyle = col; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x(i), y(b.h)); g.lineTo(x(i), y(b.l)); g.stroke();
+    g.fillStyle = col;
+    var top = y(Math.max(b.o, b.c)), bot = y(Math.min(b.o, b.c));
+    g.fillRect(x(i) - cw / 2, top, cw, Math.max(1, bot - top));
+    g.globalAlpha = 1;
+  }
+
+  // The averages. 44 and 125 change colour with the regime, segment by segment.
+  [[f, 2.2], [sl, 2.2]].forEach(function (pair) {
+    var arr = pair[0];
+    g.lineWidth = pair[1];
+    for (var i = 0; i < view.length - 1; i++) {
+      var gi = start + i;
+      if (arr[gi] == null || arr[gi + 1] == null) continue;
+      g.strokeStyle = regimeColour(regimeOf(view[i].c, f[gi], sl[gi]));
+      g.beginPath(); g.moveTo(x(i), y(arr[gi])); g.lineTo(x(i + 1), y(arr[gi + 1])); g.stroke();
+    }
+  });
+
+  g.strokeStyle = MB.macro; g.lineWidth = 1.6; g.globalAlpha = 0.9;
+  g.beginPath();
+  var started = false;
+  for (var i = 0; i < view.length; i++) {
+    var gi = start + i;
+    if (mac[gi] == null) continue;
+    if (!started) { g.moveTo(x(i), y(mac[gi])); started = true; }
+    else g.lineTo(x(i), y(mac[gi]));
+  }
+  g.stroke(); g.globalAlpha = 1;
+
+  // Price axis, then the last price called out against its own regime.
+  g.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
+  g.textBaseline = 'middle';
+  g.fillStyle = 'rgba(234,246,255,.42)';
+  for (var k = 0; k <= 4; k++) {
+    var v = lo + (span * k) / 4, yy = y(v);
+    g.strokeStyle = 'rgba(255,255,255,.05)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, yy); g.lineTo(plotW, yy); g.stroke();
+    g.fillStyle = 'rgba(234,246,255,.42)';
+    g.fillText(v.toLocaleString('en-US', { maximumFractionDigits: v < 10 ? 4 : 0 }), plotW + 8, yy);
+  }
+
+  var last = view[view.length - 1], li = bars.length - 1;
+  var lastRegime = regimeOf(last.c, f[li], sl[li]);
+  var ly = y(last.c);
+  g.fillStyle = regimeColour(lastRegime);
+  g.fillRect(plotW + 2, ly - 9, padR - 4, 18);
+  g.fillStyle = '#0b1016';
+  g.fillText(last.c.toLocaleString('en-US', { maximumFractionDigits: last.c < 10 ? 4 : 0 }), plotW + 8, ly);
+
+  // What you are looking at, said plainly.
+  var below200 = mac[li] != null && last.c < mac[li];
+  g.font = '12px -apple-system, system-ui, sans-serif';
+  g.textBaseline = 'alphabetic';
+  g.fillStyle = 'rgba(234,246,255,.55)';
+  var tf = (TIMEFRAMES.filter(function (t) { return t[0] === C.ci; })[0] || ['', C.ci])[1];
+  g.fillText(binanceSymbol(C.csym) + '  \u00b7  ' + tf + '  \u00b7  MoonBoys Line', 14, H - 9);
+  g.fillStyle = regimeColour(lastRegime);
+  g.fillText(lastRegime === 'bull' ? 'Above the 44 and 125'
+           : lastRegime === 'bear' ? 'Below the 44 and 125'
+           : 'Between the 44 and 125', 14, padT + 14);
+  if (below200) {
+    g.fillStyle = MB.macro;
+    g.fillText('Below the 200 \u2014 risk zone', 14, padT + 32);
+  }
+}
+
+var wantsMoonBoys = String(C.ind).toLowerCase().split(',')
+  .map(function (n) { return n.trim(); }).indexOf('moonboys') >= 0;
+
+if (C.chart && wantsMoonBoys) {
+  document.body.classList.add('charted', 'moonboys');
+  fetchMoonBoys();
+  addEventListener('resize', drawMoonBoys);
+  setInterval(function () {
+    if (document.visibilityState === 'visible') fetchMoonBoys();
+  }, 60000);
+} else if (C.chart) {
   document.body.classList.add('charted');
   var cf = document.createElement('iframe');
   var cp = new URLSearchParams({
