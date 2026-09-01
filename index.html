@@ -23,6 +23,40 @@
   body.transparent{background:transparent}
 
   /* ---------------- background ---------------- */
+  /* Live tape. Sits above the chart and the scrim but below the panel, and is
+     the one piece of the page that is meant to be read rather than glanced at,
+     so it gets a solid ground of its own rather than floating on the artwork. */
+  #tape{
+    position:fixed;top:0;left:0;right:0;z-index:5;height:34px;overflow:hidden;
+    display:flex;align-items:center;
+    background:rgba(8,10,16,.72);
+    backdrop-filter:saturate(140%) blur(10px);
+    -webkit-backdrop-filter:saturate(140%) blur(10px);
+    border-bottom:1px solid rgba(255,255,255,.08);
+    font-variant-numeric:tabular-nums;
+  }
+  #tape[hidden]{display:none}
+  #tapeTrack{
+    display:flex;flex-shrink:0;white-space:nowrap;will-change:transform;
+    animation:tape-scroll linear infinite;
+  }
+  /* The track holds the list twice, so -50% lands exactly on the copy and the
+     loop has no seam. */
+  @keyframes tape-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .tape-item{
+    display:inline-flex;align-items:baseline;gap:.5em;
+    padding:0 1.1rem;font-size:12px;letter-spacing:.04em;
+  }
+  .tape-sym{font-weight:700;color:rgba(234,246,255,.62);letter-spacing:.1em}
+  .tape-px{color:#eaf6ff;font-weight:600}
+  .tape-ch{font-weight:600}
+  .tape-ch.up{color:#3ddc97}
+  .tape-ch.dn{color:#ff7a7a}
+  /* Nothing may sit under the tape. */
+  body.taped main{padding-top:calc(5vh + 34px)}
+  body.transparent #tape{display:none}
+  @media (prefers-reduced-motion: reduce){ #tapeTrack{animation:none} }
+
   #mb{position:fixed;inset:0;z-index:0;display:none}
   body.moonboys #mb{display:block}
   #chart{position:fixed;inset:0;z-index:0;overflow:hidden}
@@ -32,8 +66,8 @@
      keep the clock legible over candles. */
   body.charted #scrim{
     background:
-      radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.42) 0%, rgba(4,6,15,.24) 46%, rgba(4,6,15,.40) 100%),
-      linear-gradient(180deg, rgba(4,6,15,.42) 0%, rgba(4,6,15,0) 32%, rgba(4,6,15,0) 68%, rgba(4,6,15,.52) 100%);
+      radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.30) 0%, rgba(4,6,15,.12) 46%, rgba(4,6,15,.26) 100%),
+      linear-gradient(180deg, rgba(4,6,15,.30) 0%, rgba(4,6,15,0) 34%, rgba(4,6,15,0) 66%, rgba(4,6,15,.38) 100%);
   }
   body.charted #stars{display:none}
   #bg{position:fixed;inset:0;overflow:hidden;z-index:0}
@@ -214,6 +248,8 @@
 </head>
 <body>
 
+<div id="tape" hidden aria-label="Live prices"><div id="tapeTrack"></div></div>
+
 <canvas id="mb"></canvas>
 <div id="chart"></div>
 <div id="bg"></div>
@@ -283,6 +319,11 @@
 
   <div class="field"><label>Accent colour</label><input type="color" id="f_color" value="#7cf2ff"></div>
 
+  <div class="field">
+    <label>Price tape across the top</label>
+    <input type="text" id="f_ticker" placeholder="BTC, ETH, SOL &mdash; or &lsquo;-&rsquo; for none">
+  </div>
+
   <label class="check"><input type="checkbox" id="f_chart"> Live chart instead of the video</label>
   <div class="row">
     <div class="field"><label>Symbol</label><input type="text" id="f_csym" placeholder="BINANCE:BTCUSDT"></div>
@@ -307,7 +348,7 @@
   <div class="note">
     Everything lives in the URL &mdash; bookmark it or paste it straight into an
     OBS <b>Browser Source</b> (1920&times;1080). Params:
-    <code>?mode=soon|brb|ending&amp;show=&amp;headline=&amp;badge=&amp;sub=&amp;endline=&amp;endbadge=&amp;pre=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;in=15&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;chart=1&amp;csym=BINANCE:BTCUSDT&amp;ci=3&amp;transparent=1&amp;nostars=1</code>.
+    <code>?mode=soon|brb|ending&amp;show=&amp;headline=&amp;badge=&amp;sub=&amp;endline=&amp;endbadge=&amp;pre=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;in=15&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;ticker=BTC,ETH,SOL&amp;chart=1&amp;csym=BINANCE:BTCUSDT&amp;ci=1D&amp;transparent=1&amp;nostars=1</code>.
     <b>chart=1</b> puts a live market behind the clock instead of the video, and pairs with
     <b>audio=1</b> to keep the music. <b>ci</b> is the timeframe (<code>5S</code>, <code>60</code>,
     <code>1D</code>&hellip;) and <b>ind</b> the indicators (<code>moonboys</code>, <code>rsi</code>&hellip;). It is TradingView, not aggr &mdash; aggr refuses to be
@@ -346,6 +387,7 @@ var DEFAULTS = {
   tz: '',                   // '' = each viewer's local time; e.g. '-5' = fixed UTC-5
   audio: false,             // play the YouTube audio as well as the picture
   vol: '70',                // 0-100, only meaningful with audio=1
+  ticker: 'BTC,ETH,SOL,XRP,DOGE,LINK,AVAX,ADA',  // scrolling tape; '-' for none
   chart: false,             // live chart instead of the video picture
   csym: 'BINANCE:BTCUSDT',  // what to chart
   ci: '1D',                 // TradingView interval: 1, 60, 1D, 1W ...
@@ -874,6 +916,78 @@ function drawMoonBoys(){
 // The chart exists to carry the indicator, so chart=1 shows it by default.
 // ind=- is the way to ask for a bare chart with nothing drawn on it.
 if (String(C.ind).trim() === '-') C.ind = '';
+/* ---------------- the tape ----------------
+ *
+ * A countdown that only counts down is dead air; a countdown with the market
+ * running across the top is worth leaving on. Prices and the 24-hour move come
+ * from Binance's public 24hr endpoint - keyless, and it sends
+ * Access-Control-Allow-Origin: * - so this is one fetch and no key to leak.
+ *
+ * The track holds the list twice and slides exactly half its width, so the loop
+ * closes on its own copy and there is no seam to see.
+ */
+function tapeSymbols(){
+  var raw = String(C.ticker).trim();
+  if (!raw || raw === '-' || raw === '0') return [];
+  return raw.split(',').map(function (n) {
+    return n.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }).filter(Boolean).slice(0, 20);
+}
+
+function fmtPrice(n){
+  var digits = n >= 1000 ? 0 : n >= 1 ? 2 : n >= 0.01 ? 4 : 6;
+  return n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function renderTape(rows){
+  var track = document.getElementById('tapeTrack');
+  if (!track) return;
+  var html = rows.map(function (r) {
+    var up = r.pct >= 0;
+    return '<span class="tape-item">' +
+           '<span class="tape-sym">' + esc(r.sym) + '</span>' +
+           '<span class="tape-px">$' + fmtPrice(r.price) + '</span>' +
+           '<span class="tape-ch ' + (up ? 'up' : 'dn') + '">' +
+           (up ? '\u25b2 ' : '\u25bc ') + Math.abs(r.pct).toFixed(2) + '%</span></span>';
+  }).join('');
+  track.innerHTML = html + html;            // the second copy is the loop
+  // Constant reading speed whatever the list length, rather than a fixed
+  // duration that sprints with eight symbols and crawls with two.
+  track.style.animationDuration = Math.max(18, rows.length * 5) + 's';
+  document.getElementById('tape').hidden = false;
+  document.body.classList.add('taped');
+}
+
+function fetchTape(){
+  var syms = tapeSymbols();
+  if (!syms.length) return Promise.resolve();
+  var pairs = syms.map(function (s) { return /USD[TC]?$/.test(s) ? s : s + 'USDT'; });
+  var url = 'https://api.binance.com/api/v3/ticker/24hr?symbols=' +
+            encodeURIComponent(JSON.stringify(pairs));
+  return fetch(url, { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (rows) {
+      var out = rows.map(function (r) {
+        return {
+          sym: r.symbol.replace(/USD[TC]?$/, ''),
+          price: parseFloat(r.lastPrice),
+          pct: parseFloat(r.priceChangePercent)
+        };
+      }).filter(function (r) { return isFinite(r.price); });
+      // Keep the order that was asked for; Binance returns its own.
+      out.sort(function (a, b) { return syms.indexOf(a.sym) - syms.indexOf(b.sym); });
+      if (out.length) renderTape(out);
+    })
+    .catch(function () { /* a dead tape just stays as it was, or never appears */ });
+}
+
+if (!C.transparent && tapeSymbols().length) {
+  fetchTape();
+  setInterval(function () {
+    if (document.visibilityState === 'visible') fetchTape();
+  }, 45000);
+}
+
 var wantsMoonBoys = String(C.ind).toLowerCase().split(',')
   .map(function (n) { return n.trim(); }).indexOf('moonboys') >= 0;
 
@@ -1128,6 +1242,7 @@ $('f_date').value = C.d ||
   (TARGET.getFullYear() + '-' + pad(TARGET.getMonth() + 1) + '-' + pad(TARGET.getDate()));
 $('f_video').value = C.v;
 $('f_color').value = /^#[0-9a-f]{6}$/i.test(C.c) ? C.c : '#7cf2ff';
+$('f_ticker').value = (C.ticker === DEFAULTS.ticker) ? '' : C.ticker;
 $('f_chart').checked = C.chart;
 $('f_csym').value = (C.csym === DEFAULTS.csym) ? '' : C.csym;
 TIMEFRAMES.forEach(function (tf) {
@@ -1163,6 +1278,7 @@ function buildURL(){
   set('v', videoId($('f_video').value) || $('f_video').value.trim(), DEFAULTS.v);
   set('c', $('f_color').value, DEFAULTS.c);
   if (C.tz !== '') u.set('tz', C.tz);
+  set('ticker', $('f_ticker').value.trim().toUpperCase(), DEFAULTS.ticker);
   if ($('f_chart').checked) {
     u.set('chart', '1');
     set('csym', $('f_csym').value.trim().toUpperCase(), DEFAULTS.csym);
