@@ -27,7 +27,7 @@
      the one piece of the page that is meant to be read rather than glanced at,
      so it gets a solid ground of its own rather than floating on the artwork. */
   #tape{
-    position:fixed;top:0;left:0;right:0;z-index:5;height:34px;overflow:hidden;
+    position:fixed;top:0;left:0;right:0;z-index:5;height:46px;overflow:hidden;
     display:flex;align-items:center;
     background:rgba(8,10,16,.72);
     backdrop-filter:saturate(140%) blur(10px);
@@ -44,16 +44,22 @@
      loop has no seam. */
   @keyframes tape-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
   .tape-item{
-    display:inline-flex;align-items:baseline;gap:.5em;
-    padding:0 1.1rem;font-size:12px;letter-spacing:.04em;
+    display:inline-flex;align-items:center;gap:.45em;
+    padding:0 1.15rem;font-size:15px;letter-spacing:.02em;
   }
-  .tape-sym{font-weight:700;color:rgba(234,246,255,.62);letter-spacing:.1em}
+  .tape-logo{
+    width:20px;height:20px;border-radius:50%;flex-shrink:0;
+    margin-right:.1em;object-fit:contain;
+    /* A coin with no artwork must not leave a broken-image glyph in the tape. */
+    background:rgba(255,255,255,.06);
+  }
+  .tape-sym{font-weight:700;color:rgba(234,246,255,.72);letter-spacing:.08em}
   .tape-px{color:#eaf6ff;font-weight:600}
-  .tape-ch{font-weight:600}
+  .tape-ch{font-weight:600;font-size:13.5px}
   .tape-ch.up{color:#3ddc97}
   .tape-ch.dn{color:#ff7a7a}
   /* Nothing may sit under the tape. */
-  body.taped main{padding-top:calc(5vh + 34px)}
+  body.taped main{padding-top:calc(5vh + 46px)}
   body.transparent #tape{display:none}
   @media (prefers-reduced-motion: reduce){ #tapeTrack{animation:none} }
 
@@ -64,6 +70,33 @@
   /* A chart is there to be read, so it does not get the full cinematic murk a
      rainstorm loop can take. The vignette still pulls the middle down enough to
      keep the clock legible over candles. */
+  /* The chart was lifted deliberately, which puts candles behind the type. A
+     shadow is what lets both be true at once: the chart stays bright and the
+     words stay readable, without dropping a slab of scrim over the artwork.
+     Two layers - a tight dark edge for letterform contrast, a wide soft one to
+     separate the block from whatever is behind it. */
+  body.charted #showName,
+  body.charted h1,
+  body.charted #startsAt,
+  body.charted #sub,
+  body.charted .badge{
+    text-shadow:
+      0 1px 2px rgba(2,4,10,.95),
+      0 2px 14px rgba(2,4,10,.85),
+      0 0 42px rgba(2,4,10,.7);
+  }
+  body.charted .badge{
+    background:rgba(6,9,16,.55);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+  }
+  body.charted .cell{
+    box-shadow:0 6px 26px rgba(2,4,10,.6);
+  }
+  body.charted .unit .label{
+    text-shadow:0 1px 3px rgba(2,4,10,.95), 0 2px 12px rgba(2,4,10,.8);
+  }
+
   body.charted #scrim{
     background:
       radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.30) 0%, rgba(4,6,15,.12) 46%, rgba(4,6,15,.26) 100%),
@@ -952,12 +985,50 @@ function fmtPrice(n){
   return n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
+/* Coin artwork, fetched once. CoinGecko's markets endpoint carries an image URL
+ * per coin, so the top 250 by cap covers almost everything the tape can name;
+ * anything left over is asked for by id. Logos never change during a stream, so
+ * this runs once and the prices refresh around it.
+ */
+var LOGOS = {};
+
+function loadLogos(){
+  var syms = tapeSymbols();
+  if (!syms.length) return Promise.resolve();
+  var base = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&sparkline=false';
+
+  var take = function (list) {
+    list.forEach(function (c) {
+      var sym = String(c.symbol || '').toUpperCase();
+      if (c.image && !LOGOS[sym]) LOGOS[sym] = c.image;
+    });
+  };
+
+  return fetch(base + '&order=market_cap_desc&per_page=250&page=1', { cache: 'force-cache' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(take)
+    .then(function () {
+      // Whatever the cap ranking missed, ask for by name - TON sits outside the
+      // top 250 and would otherwise be the one coin with no artwork.
+      var gaps = syms.filter(function (x) { return !LOGOS[x] && GECKO_IDS[x]; })
+                     .map(function (x) { return GECKO_IDS[x]; });
+      if (!gaps.length) return;
+      return fetch(base + '&ids=' + encodeURIComponent(gaps.join(',')), { cache: 'force-cache' })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(take);
+    })
+    .catch(function () { /* no artwork is a cosmetic loss, not a broken tape */ });
+}
+
 function renderTape(rows){
   var track = document.getElementById('tapeTrack');
   if (!track) return;
   var html = rows.map(function (r) {
     var up = r.pct >= 0;
+    var logo = LOGOS[r.sym];
     return '<span class="tape-item">' +
+           (logo ? '<img class="tape-logo" src="' + esc(logo) + '" alt="" loading="lazy" ' +
+                   'onerror="this.style.visibility=\'hidden\'">' : '') +
            '<span class="tape-sym">' + esc(r.sym) + '</span>' +
            '<span class="tape-px">$' + fmtPrice(r.price) + '</span>' +
            '<span class="tape-ch ' + (up ? 'up' : 'dn') + '">' +
@@ -1021,7 +1092,7 @@ function fetchTape(){
 }
 
 if (!C.transparent && tapeSymbols().length) {
-  fetchTape();
+  loadLogos().then(fetchTape);
   setInterval(function () {
     if (document.visibilityState === 'visible') fetchTape();
   }, 45000);
