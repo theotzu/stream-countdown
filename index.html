@@ -253,6 +253,8 @@
     </select>
   </div>
 
+  <div class="field"><label>Badge (the little pill up top)</label><input type="text" id="f_badge" placeholder="Live soon"></div>
+
   <div class="field"><label>Show name</label><input type="text" id="f_show" placeholder="Moon Boys Podcast"></div>
   <div class="field"><label>Headline</label><input type="text" id="f_headline" placeholder="Stream Starting Soon"></div>
   <div class="field"><label>Subtitle (optional)</label><input type="text" id="f_sub" placeholder="Episode 42"></div>
@@ -261,6 +263,13 @@
     <div class="field"><label>Date</label><input type="date" id="f_date"></div>
     <div class="field"><label>Start time</label><input type="time" id="f_time"></div>
   </div>
+
+  <div class="row">
+    <div class="field"><label>At zero &mdash; headline</label><input type="text" id="f_endline" placeholder="We&rsquo;re Live"></div>
+    <div class="field"><label>At zero &mdash; badge</label><input type="text" id="f_endbadge" placeholder="Live now"></div>
+  </div>
+
+  <div class="field"><label>Word before the time</label><input type="text" id="f_pre" placeholder="Starts"></div>
 
   <div class="field">
     <label>&hellip;or just count down N minutes from now</label>
@@ -298,7 +307,7 @@
   <div class="note">
     Everything lives in the URL &mdash; bookmark it or paste it straight into an
     OBS <b>Browser Source</b> (1920&times;1080). Params:
-    <code>?mode=soon|brb|ending&amp;show=&amp;headline=&amp;sub=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;in=15&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;chart=1&amp;csym=BINANCE:BTCUSDT&amp;ci=3&amp;transparent=1&amp;nostars=1</code>.
+    <code>?mode=soon|brb|ending&amp;show=&amp;headline=&amp;badge=&amp;sub=&amp;endline=&amp;endbadge=&amp;pre=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;in=15&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;chart=1&amp;csym=BINANCE:BTCUSDT&amp;ci=3&amp;transparent=1&amp;nostars=1</code>.
     <b>chart=1</b> puts a live market behind the clock instead of the video, and pairs with
     <b>audio=1</b> to keep the music. <b>ci</b> is the timeframe (<code>5S</code>, <code>60</code>,
     <code>1D</code>&hellip;) and <b>ind</b> the indicators (<code>moonboys</code>, <code>rsi</code>&hellip;). It is TradingView, not aggr &mdash; aggr refuses to be
@@ -324,6 +333,10 @@ var DEFAULTS = {
   show: 'Moon Boys Podcast',
   mode: 'soon',             // soon | brb | ending
   headline: '',             // '' = whatever the mode calls itself
+  badge: '',                // the little pill above the headline
+  endbadge: '',             // ...and what it becomes at zero
+  endline: '',              // the headline at zero
+  pre: '',                  // the word before the time: Starts / Back / Ends
   sub: '',
   t: '12:30',
   in: '',                   // minutes from now, instead of a wall-clock time
@@ -406,9 +419,19 @@ Object.keys(DEFAULTS).forEach(function(k){
 if (q.get('overlay') === '1') C.transparent = true;
 
 var MODE = MODES[String(C.mode).toLowerCase()] || MODES.soon;
-// An explicit headline or subtitle always wins; otherwise the mode speaks.
+// Every word on this page can be replaced. A mode is only a set of defaults for
+// that copy - whatever is passed in wins, in both the counting and zero states.
+var HEADLINE_GIVEN = !!C.headline;
 if (!C.headline) C.headline = MODE.headline;
 if (!C.sub) C.sub = MODE.sub;
+
+var BADGE = C.badge || MODE.badge;
+// A badge set by hand holds at zero too, unless a separate one is given for it:
+// someone who wrote "Live" meant it to stay "Live".
+var END_BADGE = C.endbadge || C.badge || MODE.zeroBadge;
+// Likewise a headline set by hand is not silently replaced by the mode's.
+var END_HEADLINE = C.endline || (HEADLINE_GIVEN ? C.headline : MODE.zeroHeadline);
+var PRE = C.pre || MODE.prefix;
 
 // Ending is the one mode with something to say when no time was given: a stream
 // wraps up when it wraps up. Counting down to a default 12:30 would be a lie,
@@ -504,11 +527,11 @@ if (NO_CLOCK) {
   document.body.classList.add('no-clock');
 } else {
   $('startsAt').innerHTML =
-    MODE.prefix + ' <b>' + TARGET.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) + '</b> ' +
+    esc(PRE) + ' <b>' + TARGET.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) + '</b> ' +
     '<span class="tz">' + tzLabel + '</span>' +
     ' · ' + TARGET.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
 }
-$('badgeText').textContent = MODE.badge;
+$('badgeText').textContent = BADGE;
 
 /* ---------------- background video (and its sound) ----------------
  *
@@ -969,9 +992,9 @@ function tick(){
   var ms = TARGET - Date.now();
   if (ms <= 0) {
     document.body.classList.add(MODE.endClass);
-    $('badgeText').textContent = MODE.zeroBadge;
-    $('headline').textContent = MODE.zeroHeadline;
-    document.title = (C.show ? C.show + ' — ' : '') + MODE.zeroHeadline;
+    $('badgeText').textContent = END_BADGE;
+    $('headline').textContent = END_HEADLINE;
+    document.title = (C.show ? C.show + ' — ' : '') + END_HEADLINE;
     return;
   }
   var s = Math.floor(ms / 1000);
@@ -1042,6 +1065,14 @@ $('f_in').value = C.in;
 $('f_show').value = C.show;
 $('f_headline').value = (C.headline === MODE.headline) ? '' : C.headline;
 $('f_headline').placeholder = MODE.headline;
+$('f_badge').value = C.badge;
+$('f_badge').placeholder = MODE.badge;
+$('f_endline').value = C.endline;
+$('f_endline').placeholder = MODE.zeroHeadline;
+$('f_endbadge').value = C.endbadge;
+$('f_endbadge').placeholder = MODE.zeroBadge;
+$('f_pre').value = C.pre;
+$('f_pre').placeholder = MODE.prefix;
 $('f_sub').value = (C.sub === MODE.sub) ? '' : C.sub;
 $('f_sub').placeholder = MODE.sub || 'Episode 42';
 $('f_time').value = C.t;
@@ -1073,6 +1104,10 @@ function buildURL(){
   // Only a headline the user actually typed travels; otherwise the mode names
   // itself, and switching mode later still renames the page.
   set('headline', $('f_headline').value.trim(), (MODES[pickedMode] || MODES.soon).headline);
+  set('badge', $('f_badge').value.trim(), DEFAULTS.badge);
+  set('endline', $('f_endline').value.trim(), DEFAULTS.endline);
+  set('endbadge', $('f_endbadge').value.trim(), DEFAULTS.endbadge);
+  set('pre', $('f_pre').value.trim(), DEFAULTS.pre);
   set('in', $('f_in').value.trim(), DEFAULTS.in);
   set('sub', $('f_sub').value.trim(), (MODES[pickedMode] || MODES.soon).sub);
   set('d', $('f_date').value, DEFAULTS.d);
@@ -1108,6 +1143,10 @@ $('f_mode').addEventListener('change', function(){
   var m = MODES[this.value] || MODES.soon;
   $('f_headline').placeholder = m.headline;
   $('f_sub').placeholder = m.sub || 'Episode 42';
+  $('f_badge').placeholder = m.badge;
+  $('f_endline').placeholder = m.zeroHeadline;
+  $('f_endbadge').placeholder = m.zeroBadge;
+  $('f_pre').placeholder = m.prefix;
 });
 
 $('apply').addEventListener('click', function(){ location.href = buildURL(); });
