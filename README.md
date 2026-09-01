@@ -33,6 +33,7 @@ abbreviation would be right for all of them.
 | `chart=1` | live chart behind the clock instead of the video | off |
 | `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
 | `ci` | timeframe: `1`, `5`, `60`, `1D`, `1W`&hellip; | `1D` |
+| `ind` | indicators, comma separated; `-` for a bare chart | `moonboys` |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `nostars=1` | hide the starfield | off |
 
