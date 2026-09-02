@@ -34,8 +34,8 @@ fixed offset you pinned (`UTC-5`), because one offset spans several zones and no
 abbreviation would be right for all of them.
 | `audio=1` | play the video's sound, not just its picture | off |
 | `vol` | volume `0`-`100`, with `audio=1` | `70` |
-| `twitch` | twitch channel whose chat emotes fly up the screen | none |
-| `kick` | kick channel slug, same | none |
+| `twitch` | twitch channel whose chat emotes fly up the screen; `-` for none | `moonboyspodcast` |
+| `kick` | kick channel slug, same; `-` for none | `moonboyspodcast` |
 | `emoji=0` | ignore plain unicode emoji, platform emotes only | on |
 | `ticker` | symbols for the price tape across the top; `-` for none | ~top 30, no stablecoins |
 | `chart=1` | live chart behind the clock instead of the video | off |
@@ -94,9 +94,15 @@ and reusing it to say goodbye reads as the opposite of what happened.
 
 Emotes posted in chat fly up the screen.
 
+Both Moon Boys channels are watched by default — twitch.tv/moonboyspodcast and
+kick.com/moonboyspodcast — so the wall fills from whichever chat is busier with
+nothing to configure:
+
 ```
-/?twitch=yourchannel&kick=your-slug
+/?chart=1
 ```
+
+`twitch=` and `kick=` point it elsewhere; `-` drops either one.
 
 Both are read **anonymously** — no token, no account, no server of ours in
 between. Twitch is IRC over WebSocket joined as `justinfan<random>`, a read-only

@@ -458,8 +458,10 @@ var DEFAULTS = {
   vol: '70',                // 0-100, only meaningful with audio=1
   // Roughly the top 30 by cap, stablecoins deliberately absent - a tape that
   // reports USDT at $1.00 all day is wasting the space.
-  twitch: '',               // twitch channel to watch for emotes
-  kick: '',                 // kick channel slug, same
+  // Moon Boys streams to both at once, so both are watched by default and the
+  // wall fills from whichever chat is busier. Set either to '-' to drop it.
+  twitch: 'moonboyspodcast',
+  kick: 'moonboyspodcast',
   emoji: '1',               // '0' to ignore plain unicode emoji
   ticker: 'BTC,ETH,XRP,BNB,SOL,DOGE,ADA,TRX,LINK,AVAX,SUI,XLM,HBAR,BCH,LTC,' +
           'DOT,HYPE,TON,SHIB,UNI,PEPE,NEAR,APT,ICP,ETC,POL,ARB,OP,ATOM,AAVE,BSV',
@@ -841,8 +843,8 @@ function watchKick(slug){
     .catch(function () { /* a wrong slug is quiet, not fatal */ });
 }
 
-if (C.twitch) watchTwitch(C.twitch);
-if (C.kick) watchKick(C.kick);
+if (C.twitch && C.twitch !== '-') watchTwitch(C.twitch);
+if (C.kick && C.kick !== '-') watchKick(C.kick);
 
 /* ---------------- MoonBoys Line ----------------
  *
