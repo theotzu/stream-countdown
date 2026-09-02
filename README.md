@@ -111,6 +111,12 @@ makes emotes identifiable. Kick is Pusher on `chatrooms.<id>.v2`, with the id
 from their channel API, which reflects the page's origin back so the browser is
 allowed to ask. Both were verified against live chat before this was written.
 
+Each emote takes its own path: it weaves side to side by a random amount in a
+random direction, at a random size and tilt, over roughly ten seconds, and holds
+full opacity until about three quarters of the way up before dissolving slowly
+rather than blinking out. A hundred identical rises up the same line read as an
+animation; this reads as chat.
+
 Plain unicode emoji fly too; `emoji=0` limits it to real platform emotes. At
 most 44 are on screen at once, so a raid cannot melt the page, and either socket
 reconnects on its own with backoff — a stream outlasts any single connection.
