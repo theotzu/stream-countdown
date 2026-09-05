@@ -43,6 +43,7 @@ abbreviation would be right for all of them.
 | `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
 | `ci` | timeframe: `1`, `5`, `60`, `1D`, `1W`&hellip; | `1D` |
 | `ind` | `moonboys`, `volume`, `macd` &mdash; comma separated; `-` for a bare chart | `moonboys` |
+| `crosses=0` | hide the gold / silver / death cross columns | on |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `nostars=1` | hide the starfield | off |
 
@@ -249,6 +250,33 @@ dropped in silence. Only `-` (a bare chart) routes to TradingView's built-ins.
 It is a reimplementation, not the Pine script running - worth eyeballing against
 the real chart before trusting it on stream. Any other `ind` value still goes to
 TradingView, where only built-in studies work.
+
+### Crosses
+
+When the averages cross, a translucent column runs the full height of the
+screen through that candle. Theo, 2026-09-05: "i used to have an indicator like
+that and i loved it but i havent been able to find it in years."
+
+| | which pair | colour |
+| --- | --- | --- |
+| **Golden cross** | the 44 crosses **up** through the 200 | gold |
+| **Death cross** | the 44 crosses **down** through the 200 | red, with a skull at the top |
+| **Silver cross** | the 44 crosses **up** through the 125 | silver |
+
+The classic names assume 50/200, and this chart runs 44/125/200, so golden and
+death are the 44 against the 200 - the same relationship everyone means by
+them - and silver is the shorter, earlier 44 against the 125.
+
+The averages stay pinned to the daily whatever the chart's timeframe, so on an
+intraday chart a cross lands on the bar where the **daily** value flipped, which
+is the honest place for it rather than the nearest intraday candle.
+
+The column is drawn over the candles at 20%, not behind them, with a brighter
+1.5px core so a wide band on a daily chart still reads as a line. It is drawn
+outside the price pane's clip on purpose: a column that stopped at the edge of
+the plot would be a highlight on a chart, and this is a marker on the screen.
+
+`crosses=0` turns them off.
 
 ### Why the chart is TradingView and not aggr
 

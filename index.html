@@ -490,6 +490,7 @@ var DEFAULTS = {
   ci: '1D',                 // TradingView interval: 1, 60, 1D, 1W ...
   ind: 'moonboys',          // indicators, comma separated; '-' for a bare chart
   tspeed: '90',             // tape reading speed in px/s
+  crosses: '1',             // gold/silver/death cross columns on the chart
   transparent: false,
   nostars: false
 };
@@ -1001,6 +1002,82 @@ function fetchMoonBoys(){
     });
 }
 
+/* CROSSES.
+ *
+ * Theo, 2026-09-05: "when there is a golden cross, i want a transparent gold
+ * line to encompass that candle vertically. i used to have an indicator like
+ * that and i loved it but i havent been able to find it in years. same thing
+ * for silver cross... not sure what we wanna do for death cross, maybe a skull
+ * emoji? lol"
+ *
+ * WHICH PAIRS, since the classic names assume 50/200 and this chart runs
+ * 44/125/200:
+ *
+ *   GOLDEN   44 crosses UP through the 200   — the 50/200 everyone means
+ *   DEATH    44 crosses DOWN through the 200 — its other half
+ *   SILVER   44 crosses UP through the 125   — the shorter, earlier one
+ *
+ * The averages are daily whatever the chart's timeframe, so on an intraday
+ * chart a cross lands on the bar where the daily value flipped, which is the
+ * honest place for it.
+ */
+function crossesIn(start, view, f, sl, mac){
+  var out = [];
+  var cross = function (a, b, i) {
+    var pa = a[i - 1], pb = b[i - 1], na = a[i], nb = b[i];
+    if (pa == null || pb == null || na == null || nb == null) return 0;
+    if (pa <= pb && na > nb) return 1;
+    if (pa >= pb && na < nb) return -1;
+    return 0;
+  };
+  for (var i = 1; i < view.length; i++) {
+    var gi = start + i;
+    var macro = cross(f, mac, gi);
+    if (macro === 1) { out.push({ i: i, kind: 'golden' }); continue; }
+    if (macro === -1) { out.push({ i: i, kind: 'death' }); continue; }
+    if (cross(f, sl, gi) === 1) out.push({ i: i, kind: 'silver' });
+  }
+  return out;
+}
+
+var CROSS_STYLE = {
+  golden: { rgb: '245,182,66',  skull: false },
+  silver: { rgb: '207,216,227', skull: false },
+  death:  { rgb: '255,95,95',   skull: true }
+};
+
+/* Drawn AFTER the price pane's clip is released, because the whole point is
+ * that the column runs the full height of the screen rather than stopping at
+ * the edge of the plot.
+ */
+function drawCrosses(g, marks, x, step, W, H, topGuard){
+  marks.forEach(function (m) {
+    var st = CROSS_STYLE[m.kind];
+    var w = Math.max(6, step * 0.9);
+    var cx = x(m.i);
+
+    g.fillStyle = 'rgba(' + st.rgb + ',.2)';
+    g.fillRect(cx - w / 2, 0, w, H);
+    // A brighter core, so a wide band on a daily chart still reads as a line
+    // rather than as a smear.
+    g.fillStyle = 'rgba(' + st.rgb + ',.6)';
+    g.fillRect(cx - 0.75, 0, 1.5, H);
+
+    if (st.skull) {
+      /*
+        Sits under the tape and clear of the coin badge, and is nudged inboard
+        at the screen edges so half a skull never hangs off the side.
+      */
+      g.font = '30px -apple-system, "Apple Color Emoji", "Segoe UI Emoji", system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'top';
+      g.fillText('\uD83D\uDC80', Math.max(20, Math.min(W - 20, cx)), topGuard);
+      g.textAlign = 'left';
+      g.textBaseline = 'alphabetic';
+    }
+  });
+}
+
 /* THE HEADLINE OF THE CHART: this is Bitcoin.
  *
  * The chart already said so, in 12px at 55% opacity along the bottom edge,
@@ -1223,6 +1300,19 @@ function drawMoonBoys(){
   g.stroke(); g.globalAlpha = 1;
 
   g.restore();
+
+  /*
+    The crosses, over everything and floor to ceiling.
+
+    Deliberately outside the clip that the price pane runs under: a column that
+    stopped at the edge of the plot would be a highlight on a chart, and the
+    thing being rebuilt here is a marker on the SCREEN. Over the candles rather
+    than behind them, at 16%, so the bar it marks is still legible through it.
+  */
+  if (String(C.crosses) !== '0') {
+    var tapeGuard = (document.body.classList.contains('taped') ? 46 : 0) + 10;
+    drawCrosses(g, crossesIn(start, view, f, sl, mac), x, step, W, H, tapeGuard);
+  }
 
   // ---- MACD, on the chart's own timeframe ----
   if (wantsMacd) {
