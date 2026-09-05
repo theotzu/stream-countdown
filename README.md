@@ -314,8 +314,10 @@ TradingView, where only built-in studies work.
 
 ### Crosses
 
-When the averages cross, a translucent column runs the full height of the
-screen through that candle. Theo, 2026-09-05: "i used to have an indicator like
+When the averages cross, a translucent column runs the height of the screen
+through that candle - down to the floor of the price pane when MACD is up,
+since MACD is a second chart with its own axis and a price cross has nothing
+to say about it. Theo, 2026-09-05: "i used to have an indicator like
 that and i loved it but i havent been able to find it in years."
 
 | | which pair | colour |
@@ -332,15 +334,21 @@ The averages stay pinned to the daily whatever the chart's timeframe, so on an
 intraday chart a cross lands on the bar where the **daily** value flipped, which
 is the honest place for it rather than the nearest intraday candle.
 
-The column is drawn over the candles, not behind them, as a gradient across its
-own width - brightest through the candle it marks, falling to almost nothing at
-the edges. It began as a flat 20% band with a brighter 1.5px core, which on
-silver read as *"a weird white line inside it"* (Theo, 2026-09-05): a hard edge
-inside a soft shape, and on a colour that is nearly white to begin with it
-looked like a second object rather than the same one. The gradient does what
-the core was there for with no edge to misread. Silver was also cooled from
-`207,216,227` toward blue, so it reads as metal rather than as a stray white
-line.
+The column is drawn over the candles, not behind them, at a flat 28% edge to
+edge. It took two wrong turns to land there, both worth recording:
+
+- It began as a 20% band with a brighter 1.5px core, so a wide band on a daily
+  chart would still read as a line. On silver - a colour that is nearly white
+  already - the core read as a separate object: *"the silver cross seems to
+  have a weird white line inside it."*
+- Replacing the core with a gradient across the width fixed that and introduced
+  the opposite problem: *"a bit blurry on its sides. i was hoping it would be a
+  bit more uniform."*
+
+One alpha, no core, no falloff. A band of glass laid over the candle, which is
+what was asked for in the first place - a transparent vertical line, not a glow.
+Silver was also cooled from `207,216,227` toward blue, so it reads as metal
+rather than as a stray white line.
 
 It is drawn outside the price pane's clip on purpose: a column that stopped at
 the edge of the plot would be a highlight on a chart, and this is a marker on

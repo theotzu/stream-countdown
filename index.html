@@ -1113,10 +1113,16 @@ var CROSS_STYLE = {
 };
 
 /* Drawn AFTER the price pane's clip is released, because the whole point is
- * that the column runs the full height of the screen rather than stopping at
- * the edge of the plot.
+ * that the column runs the height of the screen rather than stopping at the
+ * edge of the plot.
+ *
+ * `bottom` is the one exception. Theo, 2026-09-05: "the silver cross doesnt
+ * need to bleed into the macd area either." Right — MACD is a second chart with
+ * its own axis, and a price cross has nothing to say about it. With MACD up the
+ * column stops at the floor of the price pane; without it, the screen is the
+ * price pane and the column runs the whole way down.
  */
-function drawCrosses(g, marks, x, step, W, H, topGuard){
+function drawCrosses(g, marks, x, step, W, bottom, topGuard){
   marks.forEach(function (m) {
     var st = CROSS_STYLE[m.kind];
     var w = Math.max(6, step * 0.9);
@@ -1141,7 +1147,7 @@ function drawCrosses(g, marks, x, step, W, H, topGuard){
       not a glow.
     */
     g.fillStyle = 'rgba(' + st.rgb + ',.28)';
-    g.fillRect(cx - w / 2, 0, w, H);
+    g.fillRect(cx - w / 2, 0, w, bottom);
 
     if (st.skull) {
       /*
@@ -1398,7 +1404,8 @@ function drawMoonBoys(){
   */
   if (String(C.crosses) !== '0') {
     var tapeGuard = (document.body.classList.contains('taped') ? 46 : 0) + 10;
-    drawCrosses(g, crossesIn(start, view, f, sl, mac), x, step, W, H, tapeGuard);
+    var floorY = wantsMacd ? padT + priceH : H;
+    drawCrosses(g, crossesIn(start, view, f, sl, mac), x, step, W, floorY, tapeGuard);
   }
 
   // ---- MACD, on the chart's own timeframe ----
