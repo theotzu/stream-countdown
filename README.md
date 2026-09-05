@@ -69,7 +69,7 @@ abbreviation would be right for all of them.
 | `kick` | kick channel slug, same | none |
 | `emoji=0` | ignore plain unicode emoji, platform emotes only | on |
 | `ping` | what rises for every chat message: an emoji, `btc`, an image URL, or `off` | 💬 |
-| `ticker` | symbols for the price tape across the top; `-` for none | ~top 30, no stablecoins |
+| `ticker` | the price tape: `top` for the curated ~30, or your own `BTC,ETH,SOL` | off |
 | `tspeed` | how fast the tape reads, in pixels per second | `55` |
 | `chart=1` | live chart behind the clock instead of the video | off |
 | `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
@@ -217,8 +217,15 @@ it, nothing pretends to watch it.
 
 ## The price tape
 
-A scrolling tape of live prices runs across the top by default, with the
-24-hour move beside each one. Prices come from Binance's public 24hr endpoint -
+A scrolling tape of live prices can run across the top, with the 24-hour move
+beside each one. **It is off unless you ask for it** - a checkbox in the panel,
+or `ticker=top` for the curated list, or your own `ticker=BTC,ETH,SOL`.
+
+Theo, 2026-09-05: "the starting soon project should have an option to disable
+the top ticker as well. it should be relevent to all streamers, not just
+crypto." The option was only half of it: a tape of 31 coins is the most
+crypto-specific thing on this page, and a gaming streamer's first load should
+not open on a wall of them. Prices come from Binance's public 24hr endpoint -
 keyless, open CORS - and refresh **every 5 seconds** while the page is visible.
 
 The tape's DOM is built once and then written into; only the numbers change.
@@ -263,10 +270,9 @@ happily - 31 symbols is 40 weight per call, 480/min against a 6000/min ceiling.
 CoinGecko's free tier is a fraction of that and would answer a 429, freezing
 HYPE, TON and BSV on stale numbers, so those three move on a 20-second timer.
 
-`ticker=BTC,ETH,SOL` picks the symbols and their order. There is deliberately no
-panel control for it - the default needs no fiddling - but a list set by URL
-survives Copy shareable link. `ticker=-` turns it off,
-and it never appears in `transparent=1` overlay mode.
+`ticker=BTC,ETH,SOL` picks the symbols and their order; `top` is the curated
+list. Both survive Copy shareable link. It never appears in `transparent=1`
+overlay mode.
 
 Stablecoins are deliberately absent from the default - a tape reporting USDT at
 $1.00 all day wastes the space.
@@ -305,8 +311,8 @@ Theo, 2026-09-05: "use the actual btc logo tho. not some orange circle that says
 btc lol." He was looking at the fallback: CoinGecko's artwork call is
 rate-limited on the free tier, and when it 429s the badge drew a lettered disc,
 which for the one coin this is nearly always pointed at is a poor showing. Every
-other coin still comes from CoinGecko - asked for even when `ticker=-` turns the
-tape off - and still falls back to a disc with the ticker on it.
+other coin still comes from CoinGecko - asked for even when the tape is off -
+and still falls back to a disc with the ticker on it.
 
 The badge is a **DOM element at z-index 3, not canvas**. The scrim that dims the
 chart so the clock can be read over it sits at z-index 2, and a label dimmed

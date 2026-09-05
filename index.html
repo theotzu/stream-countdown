@@ -482,6 +482,12 @@
     <input type="text" id="f_ind" placeholder="moonboys, volume, macd &mdash; &lsquo;-&rsquo; for none">
   </div>
 
+  <label class="check"><input type="checkbox" id="f_tape"> Live crypto price tape across the top</label>
+  <div class="field">
+    <label>Symbols</label>
+    <input type="text" id="f_ticker" placeholder="blank for the top 30 &mdash; or BTC, ETH, SOL">
+  </div>
+
   <label class="check"><input type="checkbox" id="f_audio"> Play the video's audio</label>
   <div class="field"><label>Volume (0&ndash;100)</label><input type="number" id="f_vol" min="0" max="100" step="5" placeholder="70"></div>
 
@@ -540,8 +546,18 @@ var DEFAULTS = {
   tz: '',                   // '' = each viewer's local time; e.g. '-5' = fixed UTC-5
   audio: false,             // play the YouTube audio as well as the picture
   vol: '70',                // 0-100, only meaningful with audio=1
-  // Roughly the top 30 by cap, stablecoins deliberately absent - a tape that
-  // reports USDT at $1.00 all day is wasting the space.
+  /*
+    THE PRICE TAPE IS OFF BY DEFAULT NOW.
+
+    Theo, 2026-09-05: "the starting soon project should have an option to
+    disable the top ticker as well. it should be relevent to all streamers, not
+    just crypto." He is right, and the option was only half of it — a tape of
+    31 coins is the single most crypto-specific thing on this page, and a
+    gaming streamer's first load should not open on a wall of them.
+
+    'top' is the curated list below. A comma-separated list of symbols works
+    too. Empty is no tape at all.
+  */
   /*
     NO CHANNEL BY DEFAULT, which is a deliberate change from 'moonboyspodcast'.
     This is a page anyone can run, and a stranger's first load pulling somebody
@@ -552,8 +568,7 @@ var DEFAULTS = {
   twitch: '',
   kick: '',
   emoji: '1',               // '0' to ignore plain unicode emoji
-  ticker: 'BTC,ETH,XRP,BNB,SOL,DOGE,ADA,TRX,LINK,AVAX,SUI,XLM,HBAR,BCH,LTC,' +
-          'DOT,HYPE,TON,SHIB,UNI,PEPE,NEAR,APT,ICP,ETC,POL,ARB,OP,ATOM,AAVE,BSV',
+  ticker: '',
   chart: false,             // live chart instead of the video picture
   csym: 'BINANCE:BTCUSDT',  // what to chart
   ci: '1D',                 // TradingView interval: 1, 60, 1D, 1W ...
@@ -1677,9 +1692,15 @@ if (String(C.ind).trim() === '-') C.ind = '';
  * The track holds the list twice and slides exactly half its width, so the loop
  * closes on its own copy and there is no seam to see.
  */
+// Roughly the top 30 by cap, stablecoins deliberately absent - a tape that
+// reports USDT at $1.00 all day is wasting the space.
+var TOP_COINS = 'BTC,ETH,XRP,BNB,SOL,DOGE,ADA,TRX,LINK,AVAX,SUI,XLM,HBAR,BCH,LTC,' +
+                'DOT,HYPE,TON,SHIB,UNI,PEPE,NEAR,APT,ICP,ETC,POL,ARB,OP,ATOM,AAVE,BSV';
+
 function tapeSymbols(){
   var raw = String(C.ticker).trim();
   if (!raw || raw === '-' || raw === '0') return [];
+  if (raw.toLowerCase() === 'top') raw = TOP_COINS;
   return raw.split(',').map(function (n) {
     return n.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   }).filter(Boolean).slice(0, 40);
@@ -2294,6 +2315,11 @@ $('f_kick').value = C.kick === '-' ? '' : C.kick;
   link, and the wall stops pinging. A box that hid the default behind grey
   placeholder text would make "no mark" and "the default mark" look identical.
 */
+var tapeOn = tapeSymbols().length > 0;
+$('f_tape').checked = tapeOn;
+// 'top' is the preset, so the box stays empty for it and shows only a list
+// somebody actually chose.
+$('f_ticker').value = (tapeOn && String(C.ticker).toLowerCase() !== 'top') ? C.ticker : '';
 $('f_ping').value = (String(C.ping).toLowerCase() === 'off' || C.ping === '') ? '' : C.ping;
 $('f_color').value = /^#[0-9a-f]{6}$/i.test(C.c) ? C.c : '#7cf2ff';
 $('f_chart').checked = C.chart;
@@ -2341,9 +2367,10 @@ function buildURL(){
   else set('ping', ping, DEFAULTS.ping);
   set('c', $('f_color').value, DEFAULTS.c);
   if (C.tz !== '') u.set('tz', C.tz);
-  // The tape has no panel control - the top-30 default needs no fiddling - but a
-  // list set by URL still has to survive Copy shareable link.
-  set('ticker', C.ticker, DEFAULTS.ticker);
+  if ($('f_tape').checked) {
+    var syms = $('f_ticker').value.trim();
+    u.set('ticker', syms === '' ? 'top' : syms);
+  }
   if ($('f_chart').checked) {
     u.set('chart', '1');
     set('csym', $('f_csym').value.trim().toUpperCase(), DEFAULTS.csym);
@@ -2434,7 +2461,7 @@ function liveApply(){
 
 /* The fields a reload cannot be avoided for, and the note that says so. */
 var RELOAD_FIELDS = ['f_video', 'f_twitch', 'f_kick', 'f_chart', 'f_csym',
-                     'f_ci', 'f_ind', 'f_audio', 'f_vol'];
+                     'f_ci', 'f_ind', 'f_audio', 'f_vol', 'f_tape', 'f_ticker'];
 
 (function wirePanel(){
   var live = ['f_mode', 'f_show', 'f_headline', 'f_sub', 'f_badge', 'f_endline',
