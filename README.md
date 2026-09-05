@@ -212,9 +212,19 @@ stays, because it is a different statement - it fires only below the 200, which
 the shading alone does not shout. Theo, 2026-09-05 — "we could
 probably somewhere indicate that we are looking at the bitcoin price as that
 small note in the bottom left corner is so small thats it hardly noticeable."
-The artwork comes from CoinGecko and is asked for even when `ticker=-` turns the
-tape off; if it cannot be fetched, a disc with the ticker on it takes its place,
-in Bitcoin's orange when the coin is Bitcoin.
+**Bitcoin's mark is in the file** - one SVG path, no network, right every time.
+Theo, 2026-09-05: "use the actual btc logo tho. not some orange circle that says
+btc lol." He was looking at the fallback: CoinGecko's artwork call is
+rate-limited on the free tier, and when it 429s the badge drew a lettered disc,
+which for the one coin this is nearly always pointed at is a poor showing. Every
+other coin still comes from CoinGecko - asked for even when `ticker=-` turns the
+tape off - and still falls back to a disc with the ticker on it.
+
+The badge is a **DOM element at z-index 3, not canvas**. The scrim that dims the
+chart so the clock can be read over it sits at z-index 2, and a label dimmed
+along with the thing it labels is a label nobody reads - Bitcoin orange under
+45% murk is brown. It appears over the native chart only; TradingView prints its
+own symbol in the corner.
 
 Sub-minute intervals are not offered: seconds are a paid TradingView feature and
 the free embed quietly serves 1-minute candles instead of saying so.

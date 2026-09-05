@@ -104,6 +104,26 @@
 
   #mb{position:fixed;inset:0;z-index:0;display:none}
   body.moonboys #mb{display:block}
+  /* THE COIN BADGE IS DOM, NOT CANVAS, AND THAT IS THE WHOLE POINT OF IT.
+     It sits at z-index 3 — above the scrim, below the tape — because the scrim
+     is what dims the chart so the clock can be read over it, and a label that
+     gets dimmed with the thing it labels is a label nobody reads. Bitcoin
+     orange under 45% murk is brown. */
+  #coin{
+    position:fixed;left:14px;top:12px;z-index:3;pointer-events:none;
+    display:flex;align-items:center;gap:11px;
+    font-family:inherit;line-height:1;
+  }
+  body.taped #coin{top:58px}
+  #coin[hidden]{display:none}
+  #coin .mark{width:38px;height:38px;border-radius:50%;display:block;flex-shrink:0}
+  #coin .mark.letters{
+    background:rgba(234,246,255,.16);color:rgba(234,246,255,.75);
+    display:flex;align-items:center;justify-content:center;
+    font-size:16px;font-weight:700;letter-spacing:.02em;
+  }
+  #coin .base{font-size:27px;font-weight:700;color:#eaf6ff}
+  #coin .tf{font-size:14px;font-weight:600;color:rgba(234,246,255,.62)}
   #chart{position:fixed;inset:0;z-index:0;overflow:hidden}
   #chart iframe{width:100%;height:100%;border:0}
   /* A chart is there to be read, so it does not get the full cinematic murk a
@@ -345,6 +365,7 @@
 <div id="tape" hidden aria-label="Live prices"><div id="tapeTrack"></div></div>
 
 <canvas id="mb"></canvas>
+<div id="coin" hidden aria-hidden="true"></div>
 <div id="chart"></div>
 <div id="bg"></div>
 <canvas id="stars"></canvas>
@@ -1094,64 +1115,62 @@ function drawCrosses(g, marks, x, step, W, H, topGuard){
   });
 }
 
+/* THE BITCOIN MARK, DRAWN RATHER THAN FETCHED.
+ *
+ * Theo, 2026-09-05: "use the actual btc logo tho. not some orange circle that
+ * says btc lol." He was looking at the fallback — CoinGecko's artwork call is
+ * rate-limited on the free tier and when it 429s the badge drew a lettered
+ * disc, which for the one coin this thing is nearly always pointed at is a
+ * poor showing.
+ *
+ * So Bitcoin's mark is in the file: one vector path, no network, crisp at any
+ * size. White disc first, then the path in Bitcoin orange — the path carries
+ * the ₿ as a knockout, so the white shows through it exactly the way the real
+ * logo does.
+ */
+var BTC_PATH_D = 'M23.638 14.904c-1.602 6.43-8.113 10.34-14.542 8.736C2.67 22.05-1.244 15.525.362 9.105 1.' +
+  '962 2.67 8.475-1.243 14.9.358c6.43 1.605 10.342 8.115 8.738 14.548v-.002zm-6.35-4.613c.24-1.59-.974-2.' +
+  '45-2.64-3.03l.54-2.153-1.315-.33-.525 2.107c-.345-.087-.705-.167-1.064-.25l.526-2.127-1.32-.33-.54 2.1' +
+  '65c-.285-.067-.565-.132-.84-.2l-1.815-.45-.35 1.407s.975.225.955.236c.535.136.63.486.615.766l-1.477 5.' +
+  '92c-.075.166-.24.406-.614.314.015.02-.96-.24-.96-.24l-.66 1.51 1.71.426.93.242-.54 2.19 1.32.327.54-2.' +
+  '17c.36.1.705.19 1.05.273l-.51 2.154 1.32.33.545-2.19c2.24.427 3.93.257 4.64-1.774.57-1.637-.03-2.58-1.' +
+  '217-3.196.854-.193 1.5-.76 1.68-1.93h.01zm-3.01 4.22c-.404 1.64-3.157.75-4.05.53l.72-2.9c.896.23 3.757' +
+  '.67 3.33 2.37zm.41-4.24c-.37 1.49-2.662.735-3.405.55l.654-2.64c.744.185 3.137.53 2.75 2.084v.006z';
+
+/* The mark, as an element rather than as pixels on the chart canvas. */
+function coinMarkHTML(base){
+  if (base === 'BTC') {
+    // White disc, then the path in Bitcoin orange. The path carries the ₿ as a
+    // knockout, so the white shows through it exactly the way the real logo
+    // does — and none of it depends on a network call.
+    return '<svg class="mark" viewBox="0 0 24 24" aria-hidden="true">' +
+           '<circle cx="12" cy="12" r="12" fill="#fff"></circle>' +
+           '<path fill="#f7931a" d="' + BTC_PATH_D + '"></path></svg>';
+  }
+  var url = LOGOS[base];
+  if (url) return '<img class="mark" src="' + esc(url) + '" alt="">';
+  // Everything that is not Bitcoin still leans on CoinGecko, and CoinGecko can
+  // be down. A disc with the ticker on it still names the asset.
+  return '<span class="mark letters">' + esc(base.slice(0, 4)) + '</span>';
+}
+
 /* THE HEADLINE OF THE CHART: this is Bitcoin.
  *
- * The chart already said so, in 12px at 55% opacity along the bottom edge,
- * which is where a caption goes when nobody is meant to read it. Theo: "that
- * small note in the bottom left corner is so small thats it hardly
- * noticeable." A chart of an unnamed asset is a picture of a squiggle.
- *
- * Returns its own height so whatever is drawn under it can start below it
- * rather than guess.
+ * The chart used to say so in 12px at 55% opacity along the bottom edge, which
+ * is where a caption goes when nobody is meant to read it. Theo: "that small
+ * note in the bottom left corner is so small thats it hardly noticeable."
  */
-function drawCoinBadge(g, x, y){
+function paintCoinBadge(){
+  var el = document.getElementById('coin');
+  // Only over the native canvas chart. TradingView prints its own symbol in
+  // the corner and two labels for one chart is one too many.
+  if (!el || !document.body.classList.contains('moonboys')) return;
   var pair = chartPair();
-  var r = 19, d = r * 2;
-
-  if (COIN_MARK && COIN_MARK.complete && COIN_MARK.naturalWidth) {
-    g.save();
-    g.beginPath(); g.arc(x + r, y + r, r, 0, Math.PI * 2); g.clip();
-    g.drawImage(COIN_MARK, x, y, d, d);
-    g.restore();
-  } else {
-    /*
-      The artwork comes from CoinGecko and CoinGecko can be down. A disc with
-      the ticker on it still names the asset, which is the whole job — and it
-      is drawn in Bitcoin's own orange when it IS Bitcoin, so the fallback
-      still reads at a glance.
-    */
-    g.beginPath(); g.arc(x + r, y + r, r, 0, Math.PI * 2);
-    g.fillStyle = pair.base === 'BTC' ? '#f7931a' : 'rgba(234,246,255,.16)';
-    g.fill();
-    g.fillStyle = pair.base === 'BTC' ? '#fff' : 'rgba(234,246,255,.75)';
-    g.font = '700 ' + (pair.base.length > 3 ? 13 : 16) + 'px -apple-system, system-ui, sans-serif';
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(pair.base.slice(0, 4), x + r, y + r + 1);
-    g.textAlign = 'left';
-  }
-
   var tf = (TIMEFRAMES.filter(function (t) { return t[0] === C.ci; })[0] || ['', C.ci])[1];
-  var textX = x + d + 11;
-
-  g.textBaseline = 'middle';
-  g.textAlign = 'left';
-  g.font = '700 27px -apple-system, system-ui, sans-serif';
-  g.fillStyle = '#eaf6ff';
-  g.fillText(pair.base, textX, y + r - 1);
-
-  /*
-    The quote currency is gone. Theo, 2026-09-05: "remove the one that says
-    usdt. we can just say btc 1 day." Nobody watching a stream is wondering
-    whether Bitcoin is being priced in dollars or in tether — the pair is
-    still spelled out in full in the caption along the bottom.
-  */
-  var after = textX + g.measureText(pair.base).width + 10;
-  g.font = '600 14px -apple-system, system-ui, sans-serif';
-  g.fillStyle = 'rgba(234,246,255,.5)';
-  g.fillText(tf, after, y + r);
-
-  g.textBaseline = 'alphabetic';
-  return d;
+  el.innerHTML = coinMarkHTML(pair.base) +
+                 '<span class="base">' + esc(pair.base) + '</span>' +
+                 '<span class="tf">' + esc(tf) + '</span>';
+  el.hidden = false;
 }
 
 function drawMoonBoys(){
@@ -1430,15 +1449,15 @@ function drawMoonBoys(){
                14, H - 24);
   }
   /*
-    The badge, and anything that has to sit under it.
+    Under the badge, which is a DOM element now — so this is the one place that
+    has to know how tall it is. 38px mark, 12px clear of the tape.
 
     Both start below the tape rather than at padT, because the tape is fixed to
     the top of the window and the chart canvas runs underneath it — at
     padT + 14 this corner was being drawn behind a 46px strip of prices.
   */
   var top = (document.body.classList.contains('taped') ? 46 : 0) + 12;
-  var badgeH = drawCoinBadge(g, 14, top);
-  var underBadge = top + badgeH + 20;
+  var underBadge = top + 38 + 20;
 
   /*
     "Above the 44 and 125" is gone — Theo, 2026-09-05, asked for it off. The
@@ -1518,25 +1537,6 @@ function chartPair(){
   return { base: whole, quote: '' };
 }
 
-/* The coin's own mark, as an Image the canvas can draw.
- *
- * Theo, 2026-09-05: "we could probably somewhere indicate that we are looking
- * at the bitcoin price as that small note in the bottom left corner is so
- * small thats it hardly noticeable. maybe just like a bitcoin logo somewhere."
- */
-var COIN_MARK = null;
-
-function loadCoinMark(){
-  var url = LOGOS[chartPair().base];
-  if (!url) return;
-  var img = new Image();
-  // Not read back with getImageData anywhere, so this is only about being a
-  // good citizen with the cache — but it costs nothing and keeps the canvas
-  // untainted if anything ever does read it.
-  img.crossOrigin = 'anonymous';
-  img.onload = function () { COIN_MARK = img; drawMoonBoys(); };
-  img.src = url;
-}
 
 function loadLogos(){
   /*
@@ -1789,7 +1789,7 @@ function pollGecko(){
 
 if (!C.transparent && tapeSymbols().length) {
   loadLogos().then(function () {
-    loadCoinMark();
+    paintCoinBadge();        // repaint once a non-BTC coin has its artwork
     pollBinance();
     pollGecko();
   });
@@ -1802,7 +1802,7 @@ if (!C.transparent && tapeSymbols().length) {
 } else if (C.chart) {
   // No tape, but there is still a chart to label. The prices are not wanted
   // here, only the one piece of artwork.
-  loadLogos().then(loadCoinMark);
+  loadLogos().then(paintCoinBadge);
 }
 
 /* What was asked for, and what this renderer can honour. Anything it cannot
@@ -1846,6 +1846,9 @@ function macdOf(closes){
 
 if (C.chart && wantsMoonBoys) {
   document.body.classList.add('charted', 'moonboys');
+  // Straight away: Bitcoin's mark is in this file and waits for nothing. Any
+  // other coin's artwork arrives later and repaints it (see loadLogos).
+  paintCoinBadge();
   fetchMoonBoys();
   addEventListener('resize', drawMoonBoys);
   setInterval(function () {
