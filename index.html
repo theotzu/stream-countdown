@@ -1042,7 +1042,9 @@ function crossesIn(start, view, f, sl, mac){
 
 var CROSS_STYLE = {
   golden: { rgb: '245,182,66',  skull: false },
-  silver: { rgb: '207,216,227', skull: false },
+  // Cooled off the near-white it started as. A silver cross should read as
+  // metal against the ink, not as a stray white line on the screen.
+  silver: { rgb: '182,199,222', skull: false },
   death:  { rgb: '255,95,95',   skull: true }
 };
 
@@ -1056,12 +1058,26 @@ function drawCrosses(g, marks, x, step, W, H, topGuard){
     var w = Math.max(6, step * 0.9);
     var cx = x(m.i);
 
-    g.fillStyle = 'rgba(' + st.rgb + ',.2)';
+    /*
+      ONE GRADIENT, NOT A BAND WITH A LINE DOWN IT.
+      
+      This started as a flat 20% column with a brighter 1.5px core, so that a
+      wide band on a daily chart would still read as a line. On gold and red
+      that core looked like a bright edition of the column; on silver, whose
+      colour is nearly white already, it looked like something else entirely —
+      Theo: "the silver cross seems to have a weird white line inside it." He
+      is right, and it was a hard edge inside a soft shape.
+
+      A gradient across the width does the job the core was there for — the
+      column is brightest through the candle it marks — with no edge anywhere
+      to read as a second object.
+    */
+    var grad = g.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0);
+    grad.addColorStop(0,    'rgba(' + st.rgb + ',.05)');
+    grad.addColorStop(0.5,  'rgba(' + st.rgb + ',.34)');
+    grad.addColorStop(1,    'rgba(' + st.rgb + ',.05)');
+    g.fillStyle = grad;
     g.fillRect(cx - w / 2, 0, w, H);
-    // A brighter core, so a wide band on a daily chart still reads as a line
-    // rather than as a smear.
-    g.fillStyle = 'rgba(' + st.rgb + ',.6)';
-    g.fillRect(cx - 0.75, 0, 1.5, H);
 
     if (st.skull) {
       /*

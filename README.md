@@ -279,10 +279,19 @@ The averages stay pinned to the daily whatever the chart's timeframe, so on an
 intraday chart a cross lands on the bar where the **daily** value flipped, which
 is the honest place for it rather than the nearest intraday candle.
 
-The column is drawn over the candles at 20%, not behind them, with a brighter
-1.5px core so a wide band on a daily chart still reads as a line. It is drawn
-outside the price pane's clip on purpose: a column that stopped at the edge of
-the plot would be a highlight on a chart, and this is a marker on the screen.
+The column is drawn over the candles, not behind them, as a gradient across its
+own width - brightest through the candle it marks, falling to almost nothing at
+the edges. It began as a flat 20% band with a brighter 1.5px core, which on
+silver read as *"a weird white line inside it"* (Theo, 2026-09-05): a hard edge
+inside a soft shape, and on a colour that is nearly white to begin with it
+looked like a second object rather than the same one. The gradient does what
+the core was there for with no edge to misread. Silver was also cooled from
+`207,216,227` toward blue, so it reads as metal rather than as a stray white
+line.
+
+It is drawn outside the price pane's clip on purpose: a column that stopped at
+the edge of the plot would be a highlight on a chart, and this is a marker on
+the screen.
 
 `crosses=0` turns them off.
 
