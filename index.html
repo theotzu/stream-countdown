@@ -82,6 +82,7 @@
     filter:drop-shadow(0 3px 8px rgba(2,4,10,.55));
   }
   .emote img{width:100%;height:100%;object-fit:contain}
+  .emote svg{width:100%;height:100%;display:block}
   /*
     Every emote gets its own path. The four --dx stops are set per element and
     alternate sign, so each one weaves rather than tracking straight up, and the
@@ -512,6 +513,7 @@ var DEFAULTS = {
   ind: 'moonboys',          // indicators, comma separated; '-' for a bare chart
   tspeed: '55',             // tape reading speed in px/s
   crosses: '1',             // gold/silver/death cross columns on the chart
+  coin: '1',                // a bitcoin mark per chat message, emote or not
   transparent: false,
   nostars: false
 };
@@ -766,6 +768,8 @@ function spawnEmote(kind, value){
     // A dead emote URL must not leave an empty box drifting up the screen.
     img.onerror = function () { el.remove(); };
     el.appendChild(img);
+  } else if (kind === 'coin') {
+    el.innerHTML = bitcoinSVG('');
   } else {
     el.textContent = value;
   }
@@ -783,11 +787,34 @@ function spawnEmote(kind, value){
   el.style.setProperty('--dx4', jitter(-0.6));
   el.style.setProperty('--dx5', jitter(0.4));
   el.style.setProperty('--rot', Math.round((Math.random() - 0.5) * 44) + 'deg');
-  el.style.setProperty('--size', Math.round(38 + Math.random() * 34) + 'px');
+  /*
+    Coins run smaller than emotes on purpose. They are a heartbeat, not a
+    message — one goes up for every line typed, so at full emote size a busy
+    chat would be a wall of Bitcoin with the actual emotes lost in it.
+  */
+  el.style.setProperty('--size', kind === 'coin'
+    ? Math.round(26 + Math.random() * 16) + 'px'
+    : Math.round(38 + Math.random() * 34) + 'px');
   // Around ten seconds, spread enough that a burst does not move as one block.
   el.style.animationDuration = (8.5 + Math.random() * 4).toFixed(2) + 's';
   el.addEventListener('animationend', function () { el.remove(); });
   wall.appendChild(el);
+}
+
+/* A MARK FOR EVERY LINE TYPED, EMOTE OR NOT.
+ *
+ * Theo, 2026-09-05: "i would like to see a bitcoin logo on the emote wall every
+ * time someone puts a message in those chats as well. just so i can spot any
+ * chat activity while watching fullscreen."
+ *
+ * Which is the gap: the wall only ever showed emotes, so a chat full of people
+ * typing sentences looked exactly like a chat with nobody in it. This is the
+ * heartbeat — one coin per message from either platform, whatever the message
+ * says. `coin=0` turns it off.
+ */
+function spawnCoin(){
+  if (String(C.coin) === '0') return;
+  spawnEmote('coin');
 }
 
 function spawnEmoji(text){
@@ -841,6 +868,7 @@ function watchTwitch(channel){
           });
         }
         spawnEmoji(body);
+        spawnCoin();
       });
     };
     ws.onclose = function () {
@@ -888,6 +916,7 @@ function watchKick(slug){
             n++;
           }
           spawnEmoji(content.replace(re, ''));
+          spawnCoin();
         };
         ws.onclose = function () {
           setTimeout(connect, retry);
@@ -1128,6 +1157,16 @@ function drawCrosses(g, marks, x, step, W, H, topGuard){
  * the ₿ as a knockout, so the white shows through it exactly the way the real
  * logo does.
  */
+/* One mark, two homes: the chart badge and the emote wall. */
+function bitcoinSVG(cls){
+  // White disc, then the path in Bitcoin orange. The path carries the ₿ as a
+  // knockout, so the white shows through it the way the real logo does — and
+  // none of it depends on a network call.
+  return '<svg' + (cls ? ' class="' + cls + '"' : '') + ' viewBox="0 0 24 24" aria-hidden="true">' +
+         '<circle cx="12" cy="12" r="12" fill="#fff"></circle>' +
+         '<path fill="#f7931a" d="' + BTC_PATH_D + '"></path></svg>';
+}
+
 var BTC_PATH_D = 'M23.638 14.904c-1.602 6.43-8.113 10.34-14.542 8.736C2.67 22.05-1.244 15.525.362 9.105 1.' +
   '962 2.67 8.475-1.243 14.9.358c6.43 1.605 10.342 8.115 8.738 14.548v-.002zm-6.35-4.613c.24-1.59-.974-2.' +
   '45-2.64-3.03l.54-2.153-1.315-.33-.525 2.107c-.345-.087-.705-.167-1.064-.25l.526-2.127-1.32-.33-.54 2.1' +
@@ -1139,14 +1178,7 @@ var BTC_PATH_D = 'M23.638 14.904c-1.602 6.43-8.113 10.34-14.542 8.736C2.67 22.05
 
 /* The mark, as an element rather than as pixels on the chart canvas. */
 function coinMarkHTML(base){
-  if (base === 'BTC') {
-    // White disc, then the path in Bitcoin orange. The path carries the ₿ as a
-    // knockout, so the white shows through it exactly the way the real logo
-    // does — and none of it depends on a network call.
-    return '<svg class="mark" viewBox="0 0 24 24" aria-hidden="true">' +
-           '<circle cx="12" cy="12" r="12" fill="#fff"></circle>' +
-           '<path fill="#f7931a" d="' + BTC_PATH_D + '"></path></svg>';
-  }
+  if (base === 'BTC') return bitcoinSVG('mark');
   var url = LOGOS[base];
   if (url) return '<img class="mark" src="' + esc(url) + '" alt="">';
   // Everything that is not Bitcoin still leans on CoinGecko, and CoinGecko can
