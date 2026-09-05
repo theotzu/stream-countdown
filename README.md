@@ -38,7 +38,7 @@ abbreviation would be right for all of them.
 | `kick` | kick channel slug, same; `-` for none | `moonboyspodcast` |
 | `emoji=0` | ignore plain unicode emoji, platform emotes only | on |
 | `ticker` | symbols for the price tape across the top; `-` for none | ~top 30, no stablecoins |
-| `tspeed` | how fast the tape reads, in pixels per second | `90` |
+| `tspeed` | how fast the tape reads, in pixels per second | `55` |
 | `chart=1` | live chart behind the clock instead of the video | off |
 | `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
 | `ci` | timeframe: `1`, `5`, `60`, `1D`, `1W`&hellip; | `1D` |
@@ -135,17 +135,25 @@ keyless, open CORS - and refresh **every 5 seconds** while the page is visible.
 
 The tape's DOM is built once and then written into; only the numbers change.
 
-**It reads at a measured 90 px/s, and the DOM is built for the symbols that were
-asked for rather than the ones that have answered.** Both of those are fixes for
-the same complaint - Theo, 2026-09-05, that the tape "feels a bit choppy as if
-its moving slower than intended":
+**It reads at a measured 55 px/s, and the DOM is built for the symbols that were
+asked for rather than the ones that have answered.**
 
-- It was. `rows.length * 5` seconds was reaching for a constant reading speed
-  and could not get there, because symbols are not the same width. Measured, 31
-  symbols over a 7,397px loop in 155s is **47.7 px/s - 0.8 of a pixel per frame
-  at 60fps**, and half that in an OBS browser source running at 30. Below one
-  pixel a frame, the eye sees the rounding rather than the movement. The
+- The speed is now a real number. `rows.length * 5` seconds was reaching for a
+  constant reading speed and could not get there, because symbols are not the
+  same width - BTC at $118,432.10 is half again as wide as SUI at $3.41.
+  Measured, 31 symbols over a 7,397px loop in 155s is **47.7 px/s**. The
   duration is now the measured track width over `tspeed`.
+
+**Slow is deliberate, and it took being wrong once to learn why.** Theo,
+2026-09-05, reported the tape "feels a bit choppy as if its moving slower than
+intended", and the first fix took it to 90 px/s. His read after watching it
+back: *"the site wasnt chopping, it was twitch. making it faster actually made
+the chop worse lol."* That is the right way round - the tape is composited and
+moving smoothly in the browser, and what he was watching was a 30fps encode. A
+wide band of small text sliding sideways is close to worst case for an encoder:
+every frame differs from the last across the entire width of the screen, and
+more speed means more difference per frame. **On stream, slower reads better.**
+`tspeed` is a URL param so it can be tuned against a live stream in seconds.
 - The two sources do not arrive together: Binance answers in the first second,
   CoinGecko brings HYPE, TON and BSV up to twenty seconds later. That changed
   the built symbol list, which rewrote animation-duration from 140s to 155s -

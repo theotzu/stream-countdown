@@ -489,7 +489,7 @@ var DEFAULTS = {
   csym: 'BINANCE:BTCUSDT',  // what to chart
   ci: '1D',                 // TradingView interval: 1, 60, 1D, 1W ...
   ind: 'moonboys',          // indicators, comma separated; '-' for a bare chart
-  tspeed: '90',             // tape reading speed in px/s
+  tspeed: '55',             // tape reading speed in px/s
   crosses: '1',             // gold/silver/death cross columns on the chart
   transparent: false,
   nostars: false
@@ -1578,20 +1578,28 @@ var TAPE_HALF = 0;     // half the track's width, as the speed was last set for
  * from the number of symbols.
  *
  * Theo, 2026-09-05: the tape "feels a bit choppy as if its moving slower than
- * intended". Measured, it was: 31 symbols over a 7,397px loop in 155s is
- * 47.7 px/s, which is 0.8 of a pixel per frame at 60fps and less than half of
- * that in an OBS browser source running at 30. Motion that small per frame is
- * where a scroll stops reading as a scroll — it is far enough below one whole
- * pixel that the eye sees the rounding rather than the movement.
+ * intended". Measured, it was slow: 31 symbols over a 7,397px loop in 155s is
+ * 47.7 px/s. `rows.length * 5` was reaching for a constant reading speed and
+ * could not get there, because symbols are not the same width — BTC at
+ * $118,432.10 is half again as wide as SUI at $3.41. Measuring the track says
+ * exactly what the old formula was estimating, so the speed is a real number
+ * now whatever it is set to.
  *
- * `rows.length * 5` was reaching for a constant reading speed and could not
- * get there, because symbols are not the same width: BTC at $118,432.10 is
- * half again as wide as SUI at $3.41. Measuring the track says exactly what
- * the old formula was estimating.
+ * 🔴 BUT THE CHOP WAS NOT THIS. Theo, same day, after watching it back: "the
+ * site wasnt chopping, it was twitch. making it faster actually made the chop
+ * worse lol." Which is the right way round: the tape is composited and moving
+ * smoothly in the browser, and what he was watching was a 30fps encode. On an
+ * encoder, a wide band of small text sliding sideways is close to worst case —
+ * every frame differs from the last across the full width of the screen — and
+ * MORE speed means MORE difference per frame and a worse result.
+ *
+ * So the default is 55 px/s and slow is a feature here, not a compromise. It
+ * is a URL param precisely so it can be tuned against a live stream in seconds
+ * without a deploy.
  */
 function tapeSpeed(){
   var n = parseFloat(C.tspeed);
-  return Math.max(10, Math.min(400, isFinite(n) && n > 0 ? n : 90));
+  return Math.max(10, Math.min(400, isFinite(n) && n > 0 ? n : 55));
 }
 
 /* Changing animation-duration keeps the animation's currentTime, so progress —
