@@ -440,7 +440,12 @@
     <div class="field"><label>Twitch channel</label><input type="text" id="f_twitch" placeholder="yourchannel"></div>
     <div class="field"><label>Kick channel</label><input type="text" id="f_kick" placeholder="yourchannel"></div>
   </div>
-  <p class="hintline">Chat emotes from either fly up the screen, and a bitcoin mark rises for every message. Leave blank for none.</p>
+  <p class="hintline">Chat emotes from either fly up the screen. Leave blank for none.</p>
+
+  <div class="field">
+    <label>Chat activity mark (rises for every message)</label>
+    <input type="text" id="f_ping" placeholder="an emoji, btc, or an image URL &mdash; empty for none">
+  </div>
 
   <div class="field"><label>Accent colour</label><input type="color" id="f_color" value="#7cf2ff"></div>
 
@@ -527,7 +532,18 @@ var DEFAULTS = {
   ind: 'moonboys',          // indicators, comma separated; '-' for a bare chart
   tspeed: '55',             // tape reading speed in px/s
   crosses: '1',             // gold/silver/death cross columns on the chart
-  coin: '1',                // a bitcoin mark per chat message, emote or not
+  /*
+    What rises for every chat message, emote or not. 'btc' draws Bitcoin's mark,
+    an emoji or a couple of characters fly as themselves, an https image URL
+    flies as a picture, and blank or 'off' turns it off.
+
+    THE DEFAULT IS NOT BITCOIN, and that is the whole reason this is a setting.
+    Theo, 2026-09-05, on the overlay as a giveaway: "we would not need bitcoin
+    logos if a gaming streamer wanted to use it." Right — the FEATURE is seeing
+    that chat is moving while fullscreen; the coin was only ever one costume
+    for it.
+  */
+  ping: '\uD83D\uDCAC',       // 💬
   transparent: false,
   nostars: false
 };
@@ -770,7 +786,7 @@ $('badgeText').textContent = BADGE;
 var EMOTE_MAX = 44;          // on screen at once, so a raid cannot melt the page
 var EMOJI_RE = /\p{Extended_Pictographic}/gu;
 
-function spawnEmote(kind, value){
+function spawnEmote(kind, value, small){
   var wall = document.getElementById('emotes');
   if (!wall || wall.childElementCount >= EMOTE_MAX) return;
   var el = document.createElement('div');
@@ -802,11 +818,11 @@ function spawnEmote(kind, value){
   el.style.setProperty('--dx5', jitter(0.4));
   el.style.setProperty('--rot', Math.round((Math.random() - 0.5) * 44) + 'deg');
   /*
-    Coins run smaller than emotes on purpose. They are a heartbeat, not a
+    Pings run smaller than emotes on purpose. They are a heartbeat, not a
     message — one goes up for every line typed, so at full emote size a busy
-    chat would be a wall of Bitcoin with the actual emotes lost in it.
+    chat would be a wall of them with the actual emotes lost inside it.
   */
-  el.style.setProperty('--size', kind === 'coin'
+  el.style.setProperty('--size', small
     ? Math.round(26 + Math.random() * 16) + 'px'
     : Math.round(38 + Math.random() * 34) + 'px');
   // Around ten seconds, spread enough that a burst does not move as one block.
@@ -823,12 +839,23 @@ function spawnEmote(kind, value){
  *
  * Which is the gap: the wall only ever showed emotes, so a chat full of people
  * typing sentences looked exactly like a chat with nobody in it. This is the
- * heartbeat — one coin per message from either platform, whatever the message
- * says. `coin=0` turns it off.
+ * heartbeat — one mark per message from either platform, whatever the message
+ * says.
+ *
+ * WHAT the mark is belongs to whoever is streaming. "We would not need bitcoin
+ * logos if a gaming streamer wanted to use it" — so `ping` takes an emoji, a
+ * word, an image, Bitcoin's mark, or nothing at all.
  */
-function spawnCoin(){
-  if (String(C.coin) === '0') return;
-  spawnEmote('coin');
+function spawnPing(){
+  var v = String(C.ping == null ? '' : C.ping).trim();
+  if (!v || v === '0' || v === '-' || v.toLowerCase() === 'off') return;
+  var k = v.toLowerCase();
+  // '1' was what this took on the day it shipped, when it only did Bitcoin.
+  if (k === 'btc' || k === 'bitcoin' || v === '1') return spawnEmote('coin', null, true);
+  if (/^https?:\/\//i.test(v)) return spawnEmote('img', v, true);
+  // An emoji is one or two code units; anything longer is almost certainly a
+  // mistake, and a paragraph rising up the screen helps nobody.
+  spawnEmote('text', Array.from(v).slice(0, 3).join(''), true);
 }
 
 function spawnEmoji(text){
@@ -882,7 +909,7 @@ function watchTwitch(channel){
           });
         }
         spawnEmoji(body);
-        spawnCoin();
+        spawnPing();
       });
     };
     ws.onclose = function () {
@@ -930,7 +957,7 @@ function watchKick(slug){
             n++;
           }
           spawnEmoji(content.replace(re, ''));
-          spawnCoin();
+          spawnPing();
         };
         ws.onclose = function () {
           setTimeout(connect, retry);
@@ -2153,6 +2180,13 @@ $('f_video').value = C.v;
 // '-' is the URL's way of saying "none"; the box says it with emptiness.
 $('f_twitch').value = C.twitch === '-' ? '' : C.twitch;
 $('f_kick').value = C.kick === '-' ? '' : C.kick;
+/*
+  Shows the mark that is actually in effect rather than an empty box with a
+  placeholder, because here empty has to MEAN something: clear it, copy the
+  link, and the wall stops pinging. A box that hid the default behind grey
+  placeholder text would make "no mark" and "the default mark" look identical.
+*/
+$('f_ping').value = (String(C.ping).toLowerCase() === 'off' || C.ping === '') ? '' : C.ping;
 $('f_color').value = /^#[0-9a-f]{6}$/i.test(C.c) ? C.c : '#7cf2ff';
 $('f_chart').checked = C.chart;
 $('f_csym').value = (C.csym === DEFAULTS.csym) ? '' : C.csym;
@@ -2190,6 +2224,11 @@ function buildURL(){
   // A leading @ is how everyone writes a handle and neither platform wants it.
   set('twitch', $('f_twitch').value.trim().replace(/^@/, ''), DEFAULTS.twitch);
   set('kick', $('f_kick').value.trim().replace(/^@/, ''), DEFAULTS.kick);
+  // Emptying this box means "no mark", which is a real choice and not the
+  // default — so it travels as 'off' rather than as nothing.
+  var ping = $('f_ping').value.trim();
+  if (ping === '') u.set('ping', 'off');
+  else set('ping', ping, DEFAULTS.ping);
   set('c', $('f_color').value, DEFAULTS.c);
   if (C.tz !== '') u.set('tz', C.tz);
   // The tape has no panel control - the top-30 default needs no fiddling - but a

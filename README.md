@@ -23,8 +23,9 @@ though the price tape and chart need an internet connection like anything else.
 ### Your channels
 
 The panel has a **Twitch channel** and a **Kick channel** box. Fill either or
-both and that chat's emotes fly up the screen, with a bitcoin mark for every
-message so you can see chat moving while you are fullscreen. Leave them blank
+both and that chat's emotes fly up the screen, with a mark for every message so
+you can see chat moving while you are fullscreen - a speech balloon by default,
+`ping` to change it. Leave them blank
 for no chat wall. Read-only and anonymous - no login, no token, nothing to
 authorise.
 
@@ -56,7 +57,7 @@ abbreviation would be right for all of them.
 | `twitch` | twitch channel whose chat emotes fly up the screen | none |
 | `kick` | kick channel slug, same | none |
 | `emoji=0` | ignore plain unicode emoji, platform emotes only | on |
-| `coin=0` | stop the bitcoin mark that rises for every chat message | on |
+| `ping` | what rises for every chat message: an emoji, `btc`, an image URL, or `off` | 💬 |
 | `ticker` | symbols for the price tape across the top; `-` for none | ~top 30, no stablecoins |
 | `tspeed` | how fast the tape reads, in pixels per second | `55` |
 | `chart=1` | live chart behind the clock instead of the video | off |
@@ -143,16 +144,30 @@ full opacity until about three quarters of the way up before dissolving slowly
 rather than blinking out. A hundred identical rises up the same line read as an
 animation; this reads as chat.
 
-**Every message sends a bitcoin mark up the wall, emote or not.** Theo,
-2026-09-05: "i would like to see a bitcoin logo on the emote wall every time
-someone puts a message in those chats as well. just so i can spot any chat
-activity while watching fullscreen." That is the gap it fills - the wall only
-ever showed emotes, so a chat full of people typing sentences looked exactly
-like a chat with nobody in it. The coins run smaller than emotes (26-42px
-against 38-72px) because they are a heartbeat rather than a message: one per
-line typed, so at full size a busy chat would be a wall of Bitcoin with the
-emotes lost in it. It is the same vector mark the chart badge uses, so it costs
-no network either. `coin=0` turns it off.
+**Every message sends a mark up the wall, emote or not.** Theo, 2026-09-05: "i
+would like to see a bitcoin logo on the emote wall every time someone puts a
+message in those chats as well. just so i can spot any chat activity while
+watching fullscreen." That is the gap it fills - the wall only ever showed
+emotes, so a chat full of people typing sentences looked exactly like a chat
+with nobody in it.
+
+`ping` decides what the mark is, because the mark is not the point - seeing that
+chat is moving is:
+
+| `ping=` | what rises |
+| --- | --- |
+| 💬 *(default)* | a speech balloon |
+| any emoji or a character or two | itself |
+| `btc` | Bitcoin's mark, drawn from the vector in this file |
+| an `https://` image URL | that picture |
+| `off` | nothing |
+
+It was Bitcoin-only for about an hour, until the obvious: *"we would not need
+bitcoin logos if a gaming streamer wanted to use it."*
+
+Marks run smaller than emotes (26-42px against 38-72px) because they are a
+heartbeat rather than a message: one per line typed, so at full size a busy chat
+would be a wall of them with the emotes lost inside.
 
 Plain unicode emoji fly too; `emoji=0` limits it to real platform emotes. At
 most 44 are on screen at once, so a raid cannot melt the page, and either socket
