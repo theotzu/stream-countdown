@@ -309,9 +309,18 @@
     color:rgba(234,246,255,.7);opacity:0;transition:opacity .25s ease;backdrop-filter:blur(10px);
   }
   body:hover #gear,#gear:focus-visible{opacity:1}
-  /* Only speaks up once a field that needs a reload has been touched. */
+  /* Only speaks up once a field that needs a reload has been touched.
+
+     The margin is set HERE rather than on .reloadnote, and that is not
+     fussiness: .hintline carries margin-top:-6px so the note under the chat
+     boxes tucks up against them, and .hintline is declared after .reloadnote,
+     so at equal specificity it wins. This selector outranks it. Without that,
+     the note sat ON the Apply button — Theo, 2026-09-05: "the Apply button
+     starts touching the text." */
   #panel .reloadnote{display:none}
-  body.needs-reload #panel .reloadnote{display:block;color:var(--accent)}
+  body.needs-reload #panel .reloadnote{
+    display:block;color:var(--accent);margin:12px 0 4px;
+  }
   #panel .hintline{
     margin:-6px 0 2px;font-size:12px;line-height:1.45;color:rgba(234,246,255,.45);
   }
@@ -356,7 +365,11 @@
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   }
   .note{margin-top:16px;font-size:11px;line-height:1.6;color:rgba(234,246,255,.35)}
-  .note code{color:rgba(234,246,255,.6);font-size:10.5px}
+  /* overflow-wrap, because a long token in a 370px panel used to run off the
+     right edge and take half of itself with it. */
+  .note code{color:rgba(234,246,255,.6);font-size:10.5px;overflow-wrap:anywhere}
+  .note a{color:var(--accent);text-decoration:none;border-bottom:1px solid currentColor}
+  #panel .urlnote{margin:10px 0 2px}
 
   #hint{position:fixed;left:50%;bottom:15px;transform:translateX(-50%);z-index:4;
     font-size:10px;letter-spacing:.2em;text-transform:uppercase;
@@ -468,26 +481,31 @@
   <div class="field"><label>Volume (0&ndash;100)</label><input type="number" id="f_vol" min="0" max="100" step="5" placeholder="70"></div>
 
   <label class="check"><input type="checkbox" id="f_transparent"> Transparent (OBS overlay mode)</label>
-  <label class="check"><input type="checkbox" id="f_nostars"> Hide starfield</label>
 
   <button class="btn" id="apply">Apply</button>
   <p class="hintline reloadnote">Everything else is already live on the page behind this panel. Apply reloads, which is only needed for the video, the chat channels and the chart.</p>
   <button class="btn ghost" id="copy">Copy shareable link</button>
   <div id="urlOut"></div>
 
+  <p class="hintline urlnote">This link is the whole setup &mdash; paste it into an OBS <b>Browser Source</b> at 1920&times;1080. Keep different ones for different shows.</p>
+
   <div class="note">
-    Everything lives in the URL &mdash; bookmark it or paste it straight into an
-    OBS <b>Browser Source</b> (1920&times;1080). Params:
-    <code>?mode=soon|brb|ending&amp;show=&amp;headline=&amp;badge=&amp;sub=&amp;endline=&amp;endbadge=&amp;pre=&amp;d=YYYY-MM-DD&amp;t=HH:MM&amp;in=15&amp;v=videoId&amp;c=hexcolor&amp;audio=1&amp;vol=70&amp;ticker=BTC,ETH,SOL&amp;chart=1&amp;csym=BINANCE:BTCUSDT&amp;ci=1D&amp;transparent=1&amp;nostars=1</code>.
+    <!--
+      The wall of &amp;param=&amp;param= that used to live here is gone. Theo,
+      2026-09-05: "the right side of it gets cut off, so it's not easily
+      copy-and-pasteable... it's a bit confusing (you've got a question mark and
+      then mode=soon and all this)." It was reference material pretending to be
+      an instruction — and the thing anyone actually needs to copy is the real
+      link in the box above, which has its own button. The full parameter list
+      lives in the README, where it can be read at a sensible width.
+    -->
     <b>chart=1</b> puts a live market behind the clock instead of the video, and pairs with
-    <b>audio=1</b> to keep the music. <b>ci</b> is the timeframe (<code>5S</code>, <code>60</code>,
-    <code>1D</code>&hellip;) and <b>ind</b> the indicators (<code>moonboys</code>, <code>rsi</code>&hellip;). It is TradingView, not aggr &mdash; aggr refuses to be
-    embedded anywhere; layer that one in OBS instead.
-    Audio is off unless you ask for it. In OBS it starts on its own; in an ordinary
-    browser tab the first click anywhere turns it on.
-    Time is read in each viewer's own timezone - and labelled with it - unless you add
-    <code>&amp;tz=-5</code> (UTC offset in hours), which pins it for everyone.
+    <b>audio=1</b> to keep the music. Audio is off unless you ask for it: in OBS it starts
+    on its own, in an ordinary browser tab the first click anywhere turns it on.
+    Time is read in each viewer's own timezone &mdash; and labelled with it &mdash; unless you add
+    <code>&amp;tz=-5</code>, which pins it to one offset for everyone.
     Keys: <b>S</b> settings, <b>F</b> fullscreen, <b>H</b> hide hint.
+    <a href="https://github.com/theotzu/stream-countdown" target="_blank" rel="noopener">Every setting, and what it does &rarr;</a>
   </div>
 </aside>
 
@@ -550,7 +568,17 @@ var DEFAULTS = {
   */
   ping: '\uD83D\uDCAC',       // 💬
   transparent: false,
-  nostars: false
+  /*
+    THE STARFIELD IS OFF NOW, AND THERE IS NO CHECKBOX FOR IT.
+
+    Theo, 2026-09-05: "i think we could hide the star field by default as well.
+    I don't think it's adding a lot to the thing. It's got stars all over the
+    couch. I don't think it's really working." Right — it was drawn for the
+    empty gradient this page started with, and over a room full of neon it
+    reads as dust on the lens. `stars=1` still brings it back for anyone
+    running the plain background it was made for.
+  */
+  stars: ''
 };
 
 /* ---------------- modes ----------------
@@ -750,7 +778,7 @@ function paintChrome(){
   $('badgeText').textContent = BADGE;
   document.title = (C.show ? C.show + ' — ' : '') + C.headline;
   document.body.classList.toggle('transparent', !!C.transparent);
-  document.body.classList.toggle('nostars', !!C.nostars);
+  document.body.classList.toggle('nostars', String(C.stars) !== '1');
   document.body.classList.toggle('no-clock', NO_CLOCK);
 
   // A live edit can move the target back into the future, so the zero state has
@@ -2172,7 +2200,7 @@ tick();
 setInterval(tick, 250);
 
 /* ---------------- starfield ---------------- */
-if (!C.transparent && !C.nostars) (function(){
+if (!C.transparent && String(C.stars) === '1') (function(){
   var cv = $('stars'), ctx = cv.getContext('2d'), stars = [], W = 0, H = 0;
   function resize(){
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -2257,7 +2285,6 @@ $('f_ind').value = C.ind;
 $('f_audio').checked = C.audio;
 $('f_vol').value = VOL;
 $('f_transparent').checked = C.transparent;
-$('f_nostars').checked = C.nostars;
 
 /* What the clock boxes looked like before anyone touched them. */
 var PREFILL = { t: $('f_time').value, d: $('f_date').value };
@@ -2305,7 +2332,7 @@ function buildURL(){
     if (v !== '' && v !== DEFAULTS.vol) u.set('vol', v);
   }
   if ($('f_transparent').checked) u.set('transparent', '1');
-  if ($('f_nostars').checked) u.set('nostars', '1');
+  if (String(C.stars) === '1') u.set('stars', '1');
   var s = u.toString();
   return location.origin + location.pathname + (s ? '?' + s : '');
 }
@@ -2354,7 +2381,6 @@ function liveApply(){
   C.in = $('f_in').value.trim();
   C.c = $('f_color').value;
   C.ping = $('f_ping').value.trim() || 'off';
-  C.nostars = $('f_nostars').checked;
   C.transparent = $('f_transparent').checked;
   /*
     Typing a time IS giving one, so the ending mode's clock comes back — and
@@ -2389,7 +2415,7 @@ var RELOAD_FIELDS = ['f_video', 'f_twitch', 'f_kick', 'f_chart', 'f_csym',
 (function wirePanel(){
   var live = ['f_mode', 'f_show', 'f_headline', 'f_sub', 'f_badge', 'f_endline',
               'f_endbadge', 'f_pre', 'f_time', 'f_date', 'f_in', 'f_color',
-              'f_ping', 'f_nostars', 'f_transparent'];
+              'f_ping', 'f_transparent'];
   live.forEach(function (id) {
     var el = $(id);
     if (!el) return;

@@ -12,7 +12,7 @@ Paste that link into an OBS **Browser Source** (1920x1080), or just open it full
 **The panel edits the page as you type.** Theo, 2026-09-05: "it should not just
 update when you click apply... we almost done need an apply button lol. maybe
 just for big changes." So the copy, the mode, the colour, the clock, the chat
-mark, the starfield and overlay mode all land on the keystroke, and the
+mark and overlay mode all land on the keystroke, and the
 shareable link rewrites itself underneath.
 
 **Apply** survives for the handful that cannot be done without rebuilding the
@@ -77,7 +77,7 @@ abbreviation would be right for all of them.
 | `ind` | `moonboys`, `volume`, `macd` &mdash; comma separated; `-` for a bare chart | `moonboys` |
 | `crosses=0` | hide the gold / silver / death cross columns | on |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
-| `nostars=1` | hide the starfield | off |
+| `stars=1` | show the starfield over the background | off |
 
 Examples:
 
@@ -427,6 +427,17 @@ for fullscreen turns the sound on as a side effect.
 Once the clock hits zero the page flips to a red "We're Live" state on its own.
 
 Keys: **S** settings, **F** fullscreen, **H** hide the hint.
+
+## The starfield is off
+
+There is one, and it is off by default with no checkbox for it. Theo,
+2026-09-05: "i think we could hide the star field by default as well. I don't
+think it's adding a lot to the thing. It's got stars all over the couch. I don't
+think it's really working."
+
+He is right about why: it was drawn for the flat gradient this page started
+with, and over a room full of neon it reads as dust on the lens. `stars=1`
+brings it back for anyone running the plain background it was made for.
 
 ## Deploy
 
