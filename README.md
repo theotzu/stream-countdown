@@ -44,7 +44,7 @@ authorise.
 
 | param | meaning | default |
 | --- | --- | --- |
-| `mode` | `soon`, `brb` or `ending` — see below | `soon` |
+| `mode` | `soon`, `brb`, `ending` or `bare` — see below | `soon` |
 | `show` | small label above the headline | none |
 | `headline` | the big text; overrides whatever the mode calls itself | mode's own |
 | `sub` | optional line under the clock | mode's own |
@@ -88,13 +88,15 @@ Examples:
 
 ## Modes
 
-Three things happen on a stream and they are the same page. `mode` picks which:
+Three things happen on a stream and they are the same page - and a fourth that
+is the page with the page taken off. `mode` picks which:
 
 | mode | headline | at zero |
 | --- | --- | --- |
 | `soon` | Stream Starting Soon | red **We're Live** |
 | `brb` | Be Right Back | red **Back Now** |
 | `ending` | Stream Ending, with *Thanks for watching* under it | goes amber |
+| `bare` | nothing at all | nothing at all |
 
 The small badge above the headline carries the status (`Wrapping up`, `Signing
 off`) while the headline makes the statement, so the two never print the same
@@ -105,7 +107,24 @@ them - so its headline does not change when the clock runs out. Only the colour
 does. Setting `sub` yourself replaces the thanks.
 
 Only the words and the colour change — the clock, the video, the sound and the
-timezone behave identically in all three.
+timezone behave identically in the first three.
+
+### bare
+
+Theo, 2026-09-05: "what if we had a mode that removed all the starting soon
+text. so it was just a cool chart stream lol."
+
+`mode=bare` takes the words and the clock away and leaves what was behind them:
+the price tape, the chart, the chat wall, the room.
+
+```
+/?mode=bare&chart=1&ind=moonboys,macd&audio=1
+```
+
+**It also drops the scrim.** The scrim exists so a clock can be read over a
+moving picture; with nothing to read, all it does is dim the thing people are
+actually watching. Without it the candles and the neon both come up bright,
+which is the point of the mode.
 
 **A mode is only a set of defaults for the copy.** Every word on the page can be
 replaced: `badge`, `headline`, `sub`, `pre`, and `endbadge` / `endline` for the

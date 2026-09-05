@@ -175,6 +175,10 @@
       radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.30) 0%, rgba(4,6,15,.70) 46%, rgba(4,6,15,.93) 100%),
       linear-gradient(180deg, rgba(4,6,15,.70) 0%, rgba(4,6,15,0) 26%, rgba(4,6,15,0) 68%, rgba(4,6,15,.88) 100%);
   }
+  /* Nothing to read, so nothing to read it over: no words, no clock, and no
+     scrim dimming the picture they were laid on. */
+  body.bare main{display:none}
+  body.bare #scrim{display:none}
   body.nostars #stars{display:none}
   body.transparent #bg,body.transparent #scrim,body.transparent #stars,
   body.transparent #chart,body.transparent #mb{display:none}
@@ -422,6 +426,7 @@
       <option value="soon">Stream Starting Soon</option>
       <option value="brb">Be Right Back</option>
       <option value="ending">Stream Ending</option>
+      <option value="bare">No text &mdash; just the visuals</option>
     </select>
   </div>
 
@@ -606,6 +611,24 @@ var MODES = {
     // are already right before the clock runs out - only the colour changes.
     zeroBadge: 'Signing off', zeroHeadline: 'Stream Ending',
     endClass: 'ended'
+  },
+  /*
+    THE FOURTH MODE SAYS NOTHING AT ALL.
+    
+    Theo, 2026-09-05: "what if we had a mode that removed all the starting soon
+    text. so it was just a cool chart stream lol." Every other mode is a set of
+    words wrapped around a clock; this one is the absence of both, and what is
+    left is what was behind them the whole time — the tape, the chart, the
+    chat, the room.
+
+    It also drops the scrim. The scrim exists so a clock can be read over a
+    moving picture; with nothing to read, all it does is dim the thing people
+    are actually watching. See body.bare in the CSS.
+  */
+  bare: {
+    badge: '', headline: '', prefix: '', sub: '',
+    zeroBadge: '', zeroHeadline: '', endClass: 'live',
+    bare: true
   }
 };
 
@@ -679,7 +702,7 @@ function derive(){
   // Likewise a headline set by hand is not silently replaced by the mode's.
   END_HEADLINE = RAW.endline || RAW.headline || MODE.zeroHeadline;
   PRE = RAW.pre || MODE.prefix;
-  NO_CLOCK = (MODE === MODES.ending) && !TIME_GIVEN;
+  NO_CLOCK = !!MODE.bare || ((MODE === MODES.ending) && !TIME_GIVEN);
   TARGET = computeTarget();
   TZ_LABEL = (C.tz !== '' && !isNaN(parseFloat(C.tz)))
     ? 'UTC' + (parseFloat(C.tz) >= 0 ? '+' : '') + C.tz
@@ -780,6 +803,7 @@ function paintChrome(){
   document.body.classList.toggle('transparent', !!C.transparent);
   document.body.classList.toggle('nostars', String(C.stars) !== '1');
   document.body.classList.toggle('no-clock', NO_CLOCK);
+  document.body.classList.toggle('bare', !!MODE.bare);
 
   // A live edit can move the target back into the future, so the zero state has
   // to be able to come off as well as go on.
