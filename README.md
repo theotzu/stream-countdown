@@ -201,7 +201,15 @@ video with a live chart and pairs with `audio=1` to keep the music underneath:
 Defaults to BTC on the daily. `csym` and `ci` change that.
 
 The chart says what it is a chart of: the coin's own mark, its ticker and the
-timeframe sit at the top left, under the tape. Theo, 2026-09-05 — "we could
+timeframe sit at the top left, under the tape - `BTC  1 day`, no quote
+currency. Theo, 2026-09-05: "remove the one that says usdt. we can just say btc
+1 day." The full pair is still spelled out in the caption along the bottom.
+
+The regime line that used to sit under it - "Above the 44 and 125" - is gone at
+his request: the chart already draws both averages and shades the band between
+them, so the line was narrating something on screen. The **risk-zone** warning
+stays, because it is a different statement - it fires only below the 200, which
+the shading alone does not shout. Theo, 2026-09-05 — "we could
 probably somewhere indicate that we are looking at the bitcoin price as that
 small note in the bottom left corner is so small thats it hardly noticeable."
 The artwork comes from CoinGecko and is asked for even when `ticker=-` turns the

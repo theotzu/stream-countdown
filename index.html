@@ -1139,10 +1139,16 @@ function drawCoinBadge(g, x, y){
   g.fillStyle = '#eaf6ff';
   g.fillText(pair.base, textX, y + r - 1);
 
+  /*
+    The quote currency is gone. Theo, 2026-09-05: "remove the one that says
+    usdt. we can just say btc 1 day." Nobody watching a stream is wondering
+    whether Bitcoin is being priced in dollars or in tether — the pair is
+    still spelled out in full in the caption along the bottom.
+  */
   var after = textX + g.measureText(pair.base).width + 10;
   g.font = '600 14px -apple-system, system-ui, sans-serif';
   g.fillStyle = 'rgba(234,246,255,.5)';
-  g.fillText((pair.quote ? pair.quote + '  \u00b7  ' : '') + tf, after, y + r);
+  g.fillText(tf, after, y + r);
 
   g.textBaseline = 'alphabetic';
   return d;
@@ -1424,25 +1430,30 @@ function drawMoonBoys(){
                14, H - 24);
   }
   /*
-    The badge, then the regime under it.
+    The badge, and anything that has to sit under it.
 
     Both start below the tape rather than at padT, because the tape is fixed to
     the top of the window and the chart canvas runs underneath it — at
-    padT + 14 the regime line was being drawn behind a 46px strip of prices.
+    padT + 14 this corner was being drawn behind a 46px strip of prices.
   */
   var top = (document.body.classList.contains('taped') ? 46 : 0) + 12;
   var badgeH = drawCoinBadge(g, 14, top);
-  var regimeY = top + badgeH + 20;
+  var underBadge = top + badgeH + 20;
 
-  g.font = '12px -apple-system, system-ui, sans-serif';
-  g.textBaseline = 'alphabetic';
-  g.fillStyle = regimeColour(lastRegime);
-  g.fillText(lastRegime === 'bull' ? 'Above the 44 and 125'
-           : lastRegime === 'bear' ? 'Below the 44 and 125'
-           : 'Between the 44 and 125', 14, regimeY);
+  /*
+    "Above the 44 and 125" is gone — Theo, 2026-09-05, asked for it off. The
+    chart draws the two averages and shades the band between them, so the line
+    was narrating a thing already on screen.
+
+    The risk-zone warning is NOT the same statement and stays: it fires only
+    below the 200, it is the one condition the shading alone does not shout,
+    and he did not ask for it. It simply moves up into the space.
+  */
   if (below200) {
+    g.font = '12px -apple-system, system-ui, sans-serif';
+    g.textBaseline = 'alphabetic';
     g.fillStyle = MB.macro;
-    g.fillText('Below the 200 \u2014 risk zone', 14, regimeY + 18);
+    g.fillText('Below the 200 \u2014 risk zone', 14, underBadge);
   }
 }
 
