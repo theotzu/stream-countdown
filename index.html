@@ -42,7 +42,7 @@
   }
   /* The track holds the list twice, so -50% lands exactly on the copy and the
      loop has no seam. */
-  @keyframes tape-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  @keyframes tape-scroll{from{transform:translate3d(0,0,0)}to{transform:translate3d(-50%,0,0)}}
   .tape-item{
     display:inline-flex;align-items:center;gap:.45em;
     padding:0 1.15rem;font-size:15px;letter-spacing:.02em;
@@ -55,7 +55,11 @@
   }
   .tape-sym{font-weight:700;color:rgba(234,246,255,.72);letter-spacing:.08em}
   .tape-px{color:#eaf6ff;font-weight:600}
-  .tape-ch{font-weight:600;font-size:13.5px}
+  /* Fixed columns, because the track's width IS the animation's endpoint: a
+     percentage that grows from 4 characters to 6 moves the finish line under
+     a scroll that is already running. Tabular figures hold the price still;
+     these hold the change. */
+  .tape-ch{font-weight:600;font-size:13.5px;min-width:5.1em;text-align:right}
   .tape-ch.up{color:#3ddc97}
   .tape-ch.dn{color:#ff7a7a}
   /* Nothing may sit under the tape. */
@@ -485,6 +489,7 @@ var DEFAULTS = {
   csym: 'BINANCE:BTCUSDT',  // what to chart
   ci: '1D',                 // TradingView interval: 1, 60, 1D, 1W ...
   ind: 'moonboys',          // indicators, comma separated; '-' for a bare chart
+  tspeed: '90',             // tape reading speed in px/s
   transparent: false,
   nostars: false
 };
@@ -996,6 +1001,60 @@ function fetchMoonBoys(){
     });
 }
 
+/* THE HEADLINE OF THE CHART: this is Bitcoin.
+ *
+ * The chart already said so, in 12px at 55% opacity along the bottom edge,
+ * which is where a caption goes when nobody is meant to read it. Theo: "that
+ * small note in the bottom left corner is so small thats it hardly
+ * noticeable." A chart of an unnamed asset is a picture of a squiggle.
+ *
+ * Returns its own height so whatever is drawn under it can start below it
+ * rather than guess.
+ */
+function drawCoinBadge(g, x, y){
+  var pair = chartPair();
+  var r = 19, d = r * 2;
+
+  if (COIN_MARK && COIN_MARK.complete && COIN_MARK.naturalWidth) {
+    g.save();
+    g.beginPath(); g.arc(x + r, y + r, r, 0, Math.PI * 2); g.clip();
+    g.drawImage(COIN_MARK, x, y, d, d);
+    g.restore();
+  } else {
+    /*
+      The artwork comes from CoinGecko and CoinGecko can be down. A disc with
+      the ticker on it still names the asset, which is the whole job — and it
+      is drawn in Bitcoin's own orange when it IS Bitcoin, so the fallback
+      still reads at a glance.
+    */
+    g.beginPath(); g.arc(x + r, y + r, r, 0, Math.PI * 2);
+    g.fillStyle = pair.base === 'BTC' ? '#f7931a' : 'rgba(234,246,255,.16)';
+    g.fill();
+    g.fillStyle = pair.base === 'BTC' ? '#fff' : 'rgba(234,246,255,.75)';
+    g.font = '700 ' + (pair.base.length > 3 ? 13 : 16) + 'px -apple-system, system-ui, sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(pair.base.slice(0, 4), x + r, y + r + 1);
+    g.textAlign = 'left';
+  }
+
+  var tf = (TIMEFRAMES.filter(function (t) { return t[0] === C.ci; })[0] || ['', C.ci])[1];
+  var textX = x + d + 11;
+
+  g.textBaseline = 'middle';
+  g.textAlign = 'left';
+  g.font = '700 27px -apple-system, system-ui, sans-serif';
+  g.fillStyle = '#eaf6ff';
+  g.fillText(pair.base, textX, y + r - 1);
+
+  var after = textX + g.measureText(pair.base).width + 10;
+  g.font = '600 14px -apple-system, system-ui, sans-serif';
+  g.fillStyle = 'rgba(234,246,255,.5)';
+  g.fillText((pair.quote ? pair.quote + '  \u00b7  ' : '') + tf, after, y + r);
+
+  g.textBaseline = 'alphabetic';
+  return d;
+}
+
 function drawMoonBoys(){
   var cv = document.getElementById('mb');
   if (!cv) return;
@@ -1240,9 +1299,11 @@ function drawMoonBoys(){
 
   // What you are looking at, said plainly.
   var below200 = mac[li] != null && last.c < mac[li];
-  g.font = '12px -apple-system, system-ui, sans-serif';
+  // Still the caption — the badge at the top is what names the asset now — but
+  // legible rather than nearly invisible.
+  g.font = '13px -apple-system, system-ui, sans-serif';
   g.textBaseline = 'alphabetic';
-  g.fillStyle = 'rgba(234,246,255,.55)';
+  g.fillStyle = 'rgba(234,246,255,.68)';
   var tf = (TIMEFRAMES.filter(function (t) { return t[0] === C.ci; })[0] || ['', C.ci])[1];
   var drawn = ['MoonBoys Line (daily 44/125/200)'];
   if (wantsVolume) drawn.push('Volume');
@@ -1256,13 +1317,26 @@ function drawMoonBoys(){
     g.fillText('not available on this chart: ' + notDrawn.join(', '),
                14, H - 24);
   }
+  /*
+    The badge, then the regime under it.
+
+    Both start below the tape rather than at padT, because the tape is fixed to
+    the top of the window and the chart canvas runs underneath it — at
+    padT + 14 the regime line was being drawn behind a 46px strip of prices.
+  */
+  var top = (document.body.classList.contains('taped') ? 46 : 0) + 12;
+  var badgeH = drawCoinBadge(g, 14, top);
+  var regimeY = top + badgeH + 20;
+
+  g.font = '12px -apple-system, system-ui, sans-serif';
+  g.textBaseline = 'alphabetic';
   g.fillStyle = regimeColour(lastRegime);
   g.fillText(lastRegime === 'bull' ? 'Above the 44 and 125'
            : lastRegime === 'bear' ? 'Below the 44 and 125'
-           : 'Between the 44 and 125', 14, padT + 14);
+           : 'Between the 44 and 125', 14, regimeY);
   if (below200) {
     g.fillStyle = MB.macro;
-    g.fillText('Below the 200 \u2014 risk zone', 14, padT + 32);
+    g.fillText('Below the 200 \u2014 risk zone', 14, regimeY + 18);
   }
 }
 
@@ -1309,8 +1383,53 @@ function fmtPrice(n){
  */
 var LOGOS = {};
 
+/* The charted pair, split.
+ *
+ * BINANCE:BTCUSDT is one word to the API and two things to a viewer: what is
+ * being priced, and what it is priced in. Only the first is worth a logo.
+ */
+var QUOTES = ['USDT', 'USDC', 'FDUSD', 'TUSD', 'BUSD', 'USD', 'EUR', 'BTC', 'ETH', 'BNB'];
+
+function chartPair(){
+  var whole = binanceSymbol(C.csym);
+  for (var i = 0; i < QUOTES.length; i++) {
+    var q = QUOTES[i];
+    if (whole.length > q.length && whole.slice(-q.length) === q) {
+      return { base: whole.slice(0, -q.length), quote: q };
+    }
+  }
+  return { base: whole, quote: '' };
+}
+
+/* The coin's own mark, as an Image the canvas can draw.
+ *
+ * Theo, 2026-09-05: "we could probably somewhere indicate that we are looking
+ * at the bitcoin price as that small note in the bottom left corner is so
+ * small thats it hardly noticeable. maybe just like a bitcoin logo somewhere."
+ */
+var COIN_MARK = null;
+
+function loadCoinMark(){
+  var url = LOGOS[chartPair().base];
+  if (!url) return;
+  var img = new Image();
+  // Not read back with getImageData anywhere, so this is only about being a
+  // good citizen with the cache — but it costs nothing and keeps the canvas
+  // untainted if anything ever does read it.
+  img.crossOrigin = 'anonymous';
+  img.onload = function () { COIN_MARK = img; drawMoonBoys(); };
+  img.src = url;
+}
+
 function loadLogos(){
-  var syms = tapeSymbols();
+  /*
+    The charted coin is asked for even when the tape is off. A chart with
+    ticker=- still wants to say what it is a chart OF, and that is the one
+    symbol whose artwork is not optional.
+  */
+  var syms = tapeSymbols().slice();
+  var charted = chartPair().base;
+  if (C.chart && charted && syms.indexOf(charted) < 0) syms.push(charted);
   if (!syms.length) return Promise.resolve();
   var base = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&sparkline=false';
 
@@ -1352,13 +1471,64 @@ function loadLogos(){
 
 /* The tape is built ONCE and then written into.
  *
- * Rebuilding innerHTML on every refresh restarts the CSS animation, so a tape
- * that refreshed every five seconds would snap back to the start every five
- * seconds - the opposite of always moving. The DOM is created on the first
- * payload and after that only the numbers are set, which the animation does not
- * notice at all.
+ * The DOM is created on the first payload and after that only the numbers are
+ * set, five seconds at a time.
+ *
+ * A correction to what this comment used to claim, checked rather than
+ * reasoned: replacing the children does NOT restart the scroll. The animation
+ * runs on #tapeTrack, which survives an innerHTML write - measured, the
+ * animation's own clock reads the same millisecond either side of one. What a
+ * rebuild actually did was change the track's WIDTH and its DURATION, and
+ * those are what move the tape. See setTapeSpeed.
  */
-var TAPE_BUILT = '';   // the symbol order the current DOM was built for
+var TAPE_BUILT = '';   // the symbol list the current DOM was built for
+var TAPE_HALF = 0;     // half the track's width, as the speed was last set for
+
+/* The tape's speed is a distance per second, measured, not a duration guessed
+ * from the number of symbols.
+ *
+ * Theo, 2026-09-05: the tape "feels a bit choppy as if its moving slower than
+ * intended". Measured, it was: 31 symbols over a 7,397px loop in 155s is
+ * 47.7 px/s, which is 0.8 of a pixel per frame at 60fps and less than half of
+ * that in an OBS browser source running at 30. Motion that small per frame is
+ * where a scroll stops reading as a scroll — it is far enough below one whole
+ * pixel that the eye sees the rounding rather than the movement.
+ *
+ * `rows.length * 5` was reaching for a constant reading speed and could not
+ * get there, because symbols are not the same width: BTC at $118,432.10 is
+ * half again as wide as SUI at $3.41. Measuring the track says exactly what
+ * the old formula was estimating.
+ */
+function tapeSpeed(){
+  var n = parseFloat(C.tspeed);
+  return Math.max(10, Math.min(400, isFinite(n) && n > 0 ? n : 90));
+}
+
+/* Changing animation-duration keeps the animation's currentTime, so progress —
+ * which is time over duration — jumps. Holding the fraction still and rewriting
+ * currentTime to match means the tape can be re-timed mid-scroll without the
+ * jolt that would otherwise announce it.
+ */
+function setTapeSpeed(track){
+  var half = track.scrollWidth / 2;
+  if (!half || Math.abs(half - TAPE_HALF) < 2) return;
+  TAPE_HALF = half;
+  var seconds = half / tapeSpeed();
+
+  var running = track.getAnimations ? track.getAnimations()[0] : null;
+  var fraction = null;
+  if (running && running.effect) {
+    var was = running.effect.getComputedTiming().duration;   // ms
+    if (was && running.currentTime != null) fraction = (running.currentTime % was) / was;
+  }
+
+  track.style.animationDuration = seconds.toFixed(2) + 's';
+
+  if (fraction != null) {
+    var now = track.getAnimations ? track.getAnimations()[0] : null;
+    if (now) now.currentTime = fraction * seconds * 1000;
+  }
+}
 
 function tapeItemHTML(r){
   var logo = LOGOS[r.sym];
@@ -1366,7 +1536,7 @@ function tapeItemHTML(r){
          (logo ? '<img class="tape-logo" src="' + esc(logo) + '" alt="" ' +
                  'onerror="this.style.visibility=\'hidden\'">' : '') +
          '<span class="tape-sym">' + esc(r.sym) + '</span>' +
-         '<span class="tape-px"></span>' +
+         '<span class="tape-px">\u2014</span>' +
          '<span class="tape-ch"></span></span>';
 }
 
@@ -1374,14 +1544,28 @@ function renderTape(rows){
   var track = document.getElementById('tapeTrack');
   if (!track) return;
 
-  var order = rows.map(function (r) { return r.sym; }).join(',');
+  /* BUILT FOR THE SYMBOLS THAT WERE ASKED FOR, NOT THE ONES THAT HAVE ANSWERED.
+   *
+   * The old condition keyed the DOM to the arrived rows, and the two sources
+   * do not arrive together: Binance answers in the first second with 28
+   * symbols, CoinGecko brings HYPE, TON and BSV up to twenty seconds later.
+   * That is a different "order", so the tape rebuilt — and the old rebuild
+   * rewrote animation-duration from the item count, 28*5s to 31*5s. A duration
+   * change keeps the elapsed time and therefore moves the PROGRESS: twenty
+   * seconds in, 20/140 becomes 20/155, which walks a 7,400px loop backwards by
+   * about a hundred pixels. Visible, and it landed at the same moment every
+   * time. Any later hiccup at either source did it again.
+   *
+   * Building the full list once means a symbol waiting on its first price
+   * shows a dash rather than removing itself, the width never changes, and the
+   * animation is never restarted.
+   */
+  var order = tapeSymbols().join(',');
   if (order !== TAPE_BUILT) {
-    var html = rows.map(tapeItemHTML).join('');
+    var html = tapeSymbols().map(function (sy) { return tapeItemHTML({ sym: sy }); }).join('');
     track.innerHTML = html + html;          // the second copy is the loop
-    // Constant reading speed whatever the list length, rather than a fixed
-    // duration that sprints with eight symbols and crawls with two.
-    track.style.animationDuration = Math.max(18, rows.length * 5) + 's';
     TAPE_BUILT = order;
+    TAPE_HALF = 0;
   }
 
   rows.forEach(function (r) {
@@ -1401,6 +1585,10 @@ function renderTape(rows){
 
   document.getElementById('tape').hidden = false;
   document.body.classList.add('taped');
+
+  // After the fill, not before it: a row of dashes is narrower than a row of
+  // prices, and the speed is set from the width that will actually be there.
+  setTapeSpeed(track);
 }
 
 function fromBinance(syms){
@@ -1476,6 +1664,7 @@ function pollGecko(){
 
 if (!C.transparent && tapeSymbols().length) {
   loadLogos().then(function () {
+    loadCoinMark();
     pollBinance();
     pollGecko();
   });
@@ -1485,6 +1674,10 @@ if (!C.transparent && tapeSymbols().length) {
   setInterval(function () {
     if (document.visibilityState === 'visible') pollGecko();
   }, TAPE_GECKO_MS);
+} else if (C.chart) {
+  // No tape, but there is still a chart to label. The prices are not wanted
+  // here, only the one piece of artwork.
+  loadLogos().then(loadCoinMark);
 }
 
 /* What was asked for, and what this renderer can honour. Anything it cannot

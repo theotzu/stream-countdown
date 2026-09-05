@@ -38,6 +38,7 @@ abbreviation would be right for all of them.
 | `kick` | kick channel slug, same; `-` for none | `moonboyspodcast` |
 | `emoji=0` | ignore plain unicode emoji, platform emotes only | on |
 | `ticker` | symbols for the price tape across the top; `-` for none | ~top 30, no stablecoins |
+| `tspeed` | how fast the tape reads, in pixels per second | `90` |
 | `chart=1` | live chart behind the clock instead of the video | off |
 | `csym` | what to chart, TradingView symbol | `BINANCE:BTCUSDT` |
 | `ci` | timeframe: `1`, `5`, `60`, `1D`, `1W`&hellip; | `1D` |
@@ -131,10 +132,34 @@ A scrolling tape of live prices runs across the top by default, with the
 24-hour move beside each one. Prices come from Binance's public 24hr endpoint -
 keyless, open CORS - and refresh **every 5 seconds** while the page is visible.
 
-The tape's DOM is built once and then written into. Rebuilding it would restart
-the CSS animation, so a five-second refresh would snap the scroll back to the
-start every five seconds; only the numbers change, which the animation does not
-notice.
+The tape's DOM is built once and then written into; only the numbers change.
+
+**It reads at a measured 90 px/s, and the DOM is built for the symbols that were
+asked for rather than the ones that have answered.** Both of those are fixes for
+the same complaint - Theo, 2026-09-05, that the tape "feels a bit choppy as if
+its moving slower than intended":
+
+- It was. `rows.length * 5` seconds was reaching for a constant reading speed
+  and could not get there, because symbols are not the same width. Measured, 31
+  symbols over a 7,397px loop in 155s is **47.7 px/s - 0.8 of a pixel per frame
+  at 60fps**, and half that in an OBS browser source running at 30. Below one
+  pixel a frame, the eye sees the rounding rather than the movement. The
+  duration is now the measured track width over `tspeed`.
+- The two sources do not arrive together: Binance answers in the first second,
+  CoinGecko brings HYPE, TON and BSV up to twenty seconds later. That changed
+  the built symbol list, which rewrote animation-duration from 140s to 155s -
+  and a duration change keeps the elapsed time, so the *progress* moves and the
+  tape walks backwards about a hundred pixels. It happened at the same moment on
+  every stream. Building the full list up front, with a dash where a price has
+  not landed yet, means the width never changes; re-timing now preserves the
+  scroll position rather than jolting it.
+
+Worth recording because it was checked rather than assumed: replacing the
+track's children does **not** restart the animation - the animation lives on
+`#tapeTrack`, which survives an innerHTML write, and its clock reads the same
+millisecond either side of one. This file used to say otherwise. The scroll is
+also genuinely composited (`ActiveTransformAnimation`, 2 paints in a layer of
+its own), so the choppiness was never a repaint problem.
 
 The two sources are polled at different rates on purpose. Binance takes 5s
 happily - 31 symbols is 40 weight per call, 480/min against a 6000/min ceiling.
@@ -165,6 +190,14 @@ video with a live chart and pairs with `audio=1` to keep the music underneath:
 ```
 
 Defaults to BTC on the daily. `csym` and `ci` change that.
+
+The chart says what it is a chart of: the coin's own mark, its ticker and the
+timeframe sit at the top left, under the tape. Theo, 2026-09-05 — "we could
+probably somewhere indicate that we are looking at the bitcoin price as that
+small note in the bottom left corner is so small thats it hardly noticeable."
+The artwork comes from CoinGecko and is asked for even when `ticker=-` turns the
+tape off; if it cannot be fetched, a disc with the ticker on it takes its place,
+in Bitcoin's orange when the coin is Bitcoin.
 
 Sub-minute intervals are not offered: seconds are a paid TradingView feature and
 the free embed quietly serves 1-minute candles instead of saying so.
