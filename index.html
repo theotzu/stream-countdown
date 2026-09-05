@@ -858,11 +858,32 @@ function spawnPing(){
   spawnEmote('text', Array.from(v).slice(0, 3).join(''), true);
 }
 
+/** Returns how many went up, which is what decides whether a ping follows. */
 function spawnEmoji(text){
-  if (C.emoji === '0') return;
+  if (C.emoji === '0') return 0;
   var found = String(text).match(EMOJI_RE);
-  if (!found) return;
-  found.slice(0, 6).forEach(function (ch) { spawnEmote('text', ch); });
+  if (!found) return 0;
+  var take = found.slice(0, 6);
+  take.forEach(function (ch) { spawnEmote('text', ch); });
+  return take.length;
+}
+
+/* ONE MESSAGE, ONE THING ON THE WALL.
+ *
+ * Theo, 2026-09-05: "i dont like how sending an emoji is emote walling both
+ * that emoji and the bitcoin. it should be one or the other."
+ *
+ * Right — the ping exists to say A MESSAGE HAPPENED, and an emote already says
+ * that, louder and with more information. Doubling up made the people who use
+ * emotes twice as loud as the people who type, which is backwards: the typers
+ * were the ones invisible in the first place.
+ *
+ * So the ping is the fallback, not the accompaniment. Both platforms funnel
+ * through here: whatever they have already shown, plus whatever the text
+ * carries, and a ping only if that came to nothing.
+ */
+function chatMessage(alreadyShown, text){
+  if (alreadyShown + spawnEmoji(text) === 0) spawnPing();
 }
 
 /* Twitch ------------------------------------------------------------------ */
@@ -896,6 +917,7 @@ function watchTwitch(channel){
         var body = line.slice(line.indexOf(' :', line.indexOf('PRIVMSG')) + 2);
 
         // emotes=<id>:<s>-<e>,<s>-<e>/<id>:<s>-<e>
+        var shown = 0;
         if (tags.emotes) {
           tags.emotes.split('/').forEach(function (part) {
             var id = part.split(':')[0];
@@ -905,11 +927,11 @@ function watchTwitch(channel){
               spawnEmote('img',
                 'https://static-cdn.jtvnw.net/emoticons/v2/' + encodeURIComponent(id) +
                 '/default/dark/2.0');
+              shown++;
             }
           });
         }
-        spawnEmoji(body);
-        spawnPing();
+        chatMessage(shown, body);
       });
     };
     ws.onclose = function () {
@@ -956,8 +978,7 @@ function watchKick(slug){
             spawnEmote('img', 'https://files.kick.com/emotes/' + m[1] + '/fullsize');
             n++;
           }
-          spawnEmoji(content.replace(re, ''));
-          spawnPing();
+          chatMessage(n, content.replace(re, ''));
         };
         ws.onclose = function () {
           setTimeout(connect, retry);

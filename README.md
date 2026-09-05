@@ -151,6 +151,14 @@ watching fullscreen." That is the gap it fills - the wall only ever showed
 emotes, so a chat full of people typing sentences looked exactly like a chat
 with nobody in it.
 
+**One message puts one thing on the wall.** The mark is a fallback, not an
+accompaniment: a message carrying an emote or an emoji shows that, and only a
+message with nothing to show gets the mark. Theo, 2026-09-05: "i dont like how
+sending an emoji is emote walling both that emoji and the bitcoin. it should be
+one or the other." Doubling up made the people who use emotes twice as loud as
+the people who type, which is backwards - the typers were the ones invisible in
+the first place.
+
 `ping` decides what the mark is, because the mark is not the point - seeing that
 chat is moving is:
 
