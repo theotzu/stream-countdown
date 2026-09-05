@@ -9,6 +9,17 @@ deployment covers every show and every episode.
 Open the page, press **S**, fill in the panel, hit **Copy shareable link**.
 Paste that link into an OBS **Browser Source** (1920x1080), or just open it fullscreen (**F**).
 
+**The panel edits the page as you type.** Theo, 2026-09-05: "it should not just
+update when you click apply... we almost done need an apply button lol. maybe
+just for big changes." So the copy, the mode, the colour, the clock, the chat
+mark, the starfield and overlay mode all land on the keystroke, and the
+shareable link rewrites itself underneath.
+
+**Apply** survives for the handful that cannot be done without rebuilding the
+page around them - a different video, different chat channels, the chart and its
+symbol - and it says so, once you touch one of those fields, rather than sitting
+there looking necessary.
+
 Opened with no settings at all, it shows you the panel rather than a countdown
 to a time you did not set.
 

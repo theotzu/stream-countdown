@@ -175,6 +175,7 @@
       radial-gradient(ellipse at 50% 46%, rgba(4,6,15,.30) 0%, rgba(4,6,15,.70) 46%, rgba(4,6,15,.93) 100%),
       linear-gradient(180deg, rgba(4,6,15,.70) 0%, rgba(4,6,15,0) 26%, rgba(4,6,15,0) 68%, rgba(4,6,15,.88) 100%);
   }
+  body.nostars #stars{display:none}
   body.transparent #bg,body.transparent #scrim,body.transparent #stars,
   body.transparent #chart,body.transparent #mb{display:none}
 
@@ -308,6 +309,9 @@
     color:rgba(234,246,255,.7);opacity:0;transition:opacity .25s ease;backdrop-filter:blur(10px);
   }
   body:hover #gear,#gear:focus-visible{opacity:1}
+  /* Only speaks up once a field that needs a reload has been touched. */
+  #panel .reloadnote{display:none}
+  body.needs-reload #panel .reloadnote{display:block;color:var(--accent)}
   #panel .hintline{
     margin:-6px 0 2px;font-size:12px;line-height:1.45;color:rgba(234,246,255,.45);
   }
@@ -467,6 +471,7 @@
   <label class="check"><input type="checkbox" id="f_nostars"> Hide starfield</label>
 
   <button class="btn" id="apply">Apply</button>
+  <p class="hintline reloadnote">Everything else is already live on the page behind this panel. Apply reloads, which is only needed for the video, the chat channels and the chart.</p>
   <button class="btn ghost" id="copy">Copy shareable link</button>
   <div id="urlOut"></div>
 
@@ -612,26 +617,46 @@ Object.keys(DEFAULTS).forEach(function(k){
 });
 if (q.get('overlay') === '1') C.transparent = true;
 
-var MODE = MODES[String(C.mode).toLowerCase()] || MODES.soon;
-// Every word on this page can be replaced. A mode is only a set of defaults for
-// that copy - whatever is passed in wins, in both the counting and zero states.
-var HEADLINE_GIVEN = !!C.headline;
-if (!C.headline) C.headline = MODE.headline;
-if (!C.sub) C.sub = MODE.sub;
-
-var BADGE = C.badge || MODE.badge;
-// A badge set by hand holds at zero too, unless a separate one is given for it:
-// someone who wrote "Live" meant it to stay "Live".
-var END_BADGE = C.endbadge || C.badge || MODE.zeroBadge;
-// Likewise a headline set by hand is not silently replaced by the mode's.
-var END_HEADLINE = C.endline || (HEADLINE_GIVEN ? C.headline : MODE.zeroHeadline);
-var PRE = C.pre || MODE.prefix;
+/* WHAT THE USER ACTUALLY WROTE, kept apart from what is being shown.
+ *
+ * Every word on this page can be replaced, and a mode is only a set of defaults
+ * for that copy - whatever is passed in wins, in both the counting and zero
+ * states. The distinction has to survive, because "" means "let the mode name
+ * it" and the mode can change while the page is open: the panel edits live now,
+ * so folding the default into C.headline the way this used to would make the
+ * first mode's words stick forever.
+ */
+var RAW = {
+  headline: C.headline, sub: C.sub, badge: C.badge,
+  endbadge: C.endbadge, endline: C.endline, pre: C.pre
+};
 
 // Ending is the one mode with something to say when no time was given: a stream
 // wraps up when it wraps up. Counting down to a default 12:30 would be a lie,
 // so with no t/in the clock is dropped and only the words remain.
-var TIME_GIVEN = q.has('t') || q.has('in') || q.has('d');
-var NO_CLOCK = (MODE === MODES.ending) && !TIME_GIVEN;
+var TIME_GIVEN_URL = q.has('t') || q.has('in') || q.has('d');
+var TIME_GIVEN = TIME_GIVEN_URL;
+
+var MODE, BADGE, END_BADGE, END_HEADLINE, PRE, NO_CLOCK, TARGET, TZ_LABEL;
+
+/* Everything derived from the config, recomputed rather than remembered. */
+function derive(){
+  MODE = MODES[String(C.mode).toLowerCase()] || MODES.soon;
+  C.headline = RAW.headline || MODE.headline;
+  C.sub = RAW.sub || MODE.sub;
+  BADGE = RAW.badge || MODE.badge;
+  // A badge set by hand holds at zero too, unless a separate one is given for
+  // it: someone who wrote "Live" meant it to stay "Live".
+  END_BADGE = RAW.endbadge || RAW.badge || MODE.zeroBadge;
+  // Likewise a headline set by hand is not silently replaced by the mode's.
+  END_HEADLINE = RAW.endline || RAW.headline || MODE.zeroHeadline;
+  PRE = RAW.pre || MODE.prefix;
+  NO_CLOCK = (MODE === MODES.ending) && !TIME_GIVEN;
+  TARGET = computeTarget();
+  TZ_LABEL = (C.tz !== '' && !isNaN(parseFloat(C.tz)))
+    ? 'UTC' + (parseFloat(C.tz) >= 0 ? '+' : '') + C.tz
+    : localZoneLabel(TARGET);
+}
 
 /* ---------------- helpers ---------------- */
 function $(id){ return document.getElementById(id); }
@@ -684,15 +709,7 @@ function computeTarget(){
   }
   return d;
 }
-var TARGET = computeTarget();
-
 /* ---------------- page chrome ---------------- */
-document.documentElement.style.setProperty('--accent', C.c);
-$('showName').textContent = C.show;
-$('headline').textContent = C.headline;
-$('sub').textContent = C.sub;
-document.title = (C.show ? C.show + ' — ' : '') + C.headline;
-if (C.transparent) document.body.classList.add('transparent');
 
 // A bare "Starts 12:30 PM" is ambiguous to anyone reading it - so the zone is
 // always named, never left implied.
@@ -722,18 +739,36 @@ function localZoneLabel(when){
   return 'UTC' + sign + hh + (mm ? ':' + String(mm).padStart(2, '0') : '');
 }
 
-var tzLabel = (C.tz !== '' && !isNaN(parseFloat(C.tz)))
-  ? 'UTC' + (parseFloat(C.tz) >= 0 ? '+' : '') + C.tz
-  : localZoneLabel(TARGET);
-if (NO_CLOCK) {
-  document.body.classList.add('no-clock');
-} else {
-  $('startsAt').innerHTML =
-    esc(PRE) + ' <b>' + TARGET.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) + '</b> ' +
-    '<span class="tz">' + tzLabel + '</span>' +
-    ' · ' + TARGET.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+/* Everything the config puts on the screen, written in one place so that a
+ * live edit is the same code path as the first paint.
+ */
+function paintChrome(){
+  document.documentElement.style.setProperty('--accent', C.c);
+  $('showName').textContent = C.show;
+  $('headline').textContent = C.headline;
+  $('sub').textContent = C.sub;
+  $('badgeText').textContent = BADGE;
+  document.title = (C.show ? C.show + ' — ' : '') + C.headline;
+  document.body.classList.toggle('transparent', !!C.transparent);
+  document.body.classList.toggle('nostars', !!C.nostars);
+  document.body.classList.toggle('no-clock', NO_CLOCK);
+
+  // A live edit can move the target back into the future, so the zero state has
+  // to be able to come off as well as go on.
+  Object.keys(MODES).forEach(function (m) {
+    document.body.classList.remove(MODES[m].endClass);
+  });
+
+  if (!NO_CLOCK) {
+    $('startsAt').innerHTML =
+      esc(PRE) + ' <b>' + TARGET.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) + '</b> ' +
+      '<span class="tz">' + TZ_LABEL + '</span>' +
+      ' · ' + TARGET.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+  }
 }
-$('badgeText').textContent = BADGE;
+
+derive();
+paintChrome();
 
 /* ---------------- background video (and its sound) ----------------
  *
@@ -2224,6 +2259,9 @@ $('f_vol').value = VOL;
 $('f_transparent').checked = C.transparent;
 $('f_nostars').checked = C.nostars;
 
+/* What the clock boxes looked like before anyone touched them. */
+var PREFILL = { t: $('f_time').value, d: $('f_date').value };
+
 function buildURL(){
   var u = new URLSearchParams();
   function set(k, v, def){ if (v !== '' && v !== def) u.set(k, v); }
@@ -2288,6 +2326,87 @@ $('f_mode').addEventListener('change', function(){
   $('f_endbadge').placeholder = m.zeroBadge;
   $('f_pre').placeholder = m.prefix;
 });
+
+/* THE PANEL EDITS THE PAGE, NOT A FORM.
+ *
+ * Theo, 2026-09-05: "it should not just update when you click apply, it should
+ * update in real time. so as i type, i should see the changes being implemented
+ * on the site in real time. we almost done need an apply button lol. maybe just
+ * for big changes."
+ *
+ * So every field that can be honoured without a reload is honoured on the
+ * keystroke: the copy, the mode, the colour, the clock, the chat mark, the
+ * starfield, overlay mode. What is left needs the page rebuilt around it — a
+ * different video, a different chat to connect to, the chart and its symbol —
+ * and those say so instead of pretending.
+ */
+function liveApply(){
+  C.mode = $('f_mode').value;
+  C.show = $('f_show').value;
+  RAW.headline = $('f_headline').value.trim();
+  RAW.sub = $('f_sub').value.trim();
+  RAW.badge = $('f_badge').value.trim();
+  RAW.endline = $('f_endline').value.trim();
+  RAW.endbadge = $('f_endbadge').value.trim();
+  RAW.pre = $('f_pre').value.trim();
+  C.t = $('f_time').value || DEFAULTS.t;
+  C.d = $('f_date').value;
+  C.in = $('f_in').value.trim();
+  C.c = $('f_color').value;
+  C.ping = $('f_ping').value.trim() || 'off';
+  C.nostars = $('f_nostars').checked;
+  C.transparent = $('f_transparent').checked;
+  /*
+    Typing a time IS giving one, so the ending mode's clock comes back — and
+    clearing it again takes the clock away, which is why this is measured
+    against the PREFILL rather than against emptiness. Both the time and the
+    date boxes arrive already filled in (12:30, today), so "has a value" would
+    read as "the user set a time" from the first keystroke in any other field.
+  */
+  var tv = $('f_time').value, dv = $('f_date').value, inv = $('f_in').value.trim();
+  TIME_GIVEN = inv !== '' ||
+               (tv !== '' && (TIME_GIVEN_URL || tv !== PREFILL.t || dv !== PREFILL.d));
+
+  derive();
+  paintChrome();
+  // The mode's own words are what the empty boxes promise, so the placeholders
+  // follow the mode as it changes.
+  $('f_headline').placeholder = MODE.headline;
+  $('f_badge').placeholder = MODE.badge;
+  $('f_endline').placeholder = MODE.zeroHeadline;
+  $('f_endbadge').placeholder = MODE.zeroBadge;
+  $('f_pre').placeholder = MODE.prefix;
+  $('f_sub').placeholder = MODE.sub || 'Episode 42';
+  prev = {};        // let the clock cells repaint against a new target
+  tick();
+  refreshURL();
+}
+
+/* The fields a reload cannot be avoided for, and the note that says so. */
+var RELOAD_FIELDS = ['f_video', 'f_twitch', 'f_kick', 'f_chart', 'f_csym',
+                     'f_ci', 'f_ind', 'f_audio', 'f_vol'];
+
+(function wirePanel(){
+  var live = ['f_mode', 'f_show', 'f_headline', 'f_sub', 'f_badge', 'f_endline',
+              'f_endbadge', 'f_pre', 'f_time', 'f_date', 'f_in', 'f_color',
+              'f_ping', 'f_nostars', 'f_transparent'];
+  live.forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener('input', liveApply);
+    el.addEventListener('change', liveApply);
+  });
+  RELOAD_FIELDS.forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    var flag = function () {
+      document.body.classList.add('needs-reload');
+      refreshURL();
+    };
+    el.addEventListener('input', flag);
+    el.addEventListener('change', flag);
+  });
+})();
 
 $('apply').addEventListener('click', function(){ location.href = buildURL(); });
 
