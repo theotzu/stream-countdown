@@ -9,12 +9,31 @@ deployment covers every show and every episode.
 Open the page, press **S**, fill in the panel, hit **Copy shareable link**.
 Paste that link into an OBS **Browser Source** (1920x1080), or just open it fullscreen (**F**).
 
+Opened with no settings at all, it shows you the panel rather than a countdown
+to a time you did not set.
+
+Nothing is stored anywhere and there is no account: every setting lives in the
+link, so the link IS the config. Save different ones for different shows.
+
+**Deploy your own** in about a minute: fork this repo, import it on Vercel (no
+build step, no environment variables), and point your browser source at your own
+URL. Or download `index.html` and give OBS the local file - it works from disk,
+though the price tape and chart need an internet connection like anything else.
+
+### Your channels
+
+The panel has a **Twitch channel** and a **Kick channel** box. Fill either or
+both and that chat's emotes fly up the screen, with a bitcoin mark for every
+message so you can see chat moving while you are fullscreen. Leave them blank
+for no chat wall. Read-only and anonymous - no login, no token, nothing to
+authorise.
+
 ## URL params
 
 | param | meaning | default |
 | --- | --- | --- |
 | `mode` | `soon`, `brb` or `ending` — see below | `soon` |
-| `show` | small label above the headline | `Moon Boys Podcast` |
+| `show` | small label above the headline | none |
 | `headline` | the big text; overrides whatever the mode calls itself | mode's own |
 | `sub` | optional line under the clock | mode's own |
 | `badge` | the small pill above the headline | mode's own |
@@ -34,8 +53,8 @@ fixed offset you pinned (`UTC-5`), because one offset spans several zones and no
 abbreviation would be right for all of them.
 | `audio=1` | play the video's sound, not just its picture | off |
 | `vol` | volume `0`-`100`, with `audio=1` | `70` |
-| `twitch` | twitch channel whose chat emotes fly up the screen; `-` for none | `moonboyspodcast` |
-| `kick` | kick channel slug, same; `-` for none | `moonboyspodcast` |
+| `twitch` | twitch channel whose chat emotes fly up the screen | none |
+| `kick` | kick channel slug, same | none |
 | `emoji=0` | ignore plain unicode emoji, platform emotes only | on |
 | `coin=0` | stop the bitcoin mark that rises for every chat message | on |
 | `ticker` | symbols for the price tape across the top; `-` for none | ~top 30, no stablecoins |
@@ -97,15 +116,19 @@ and reusing it to say goodbye reads as the opposite of what happened.
 
 Emotes posted in chat fly up the screen.
 
-Both Moon Boys channels are watched by default — twitch.tv/moonboyspodcast and
-kick.com/moonboyspodcast — so the wall fills from whichever chat is busier with
-nothing to configure:
+Set either channel in the panel, or by URL. With both set, the wall fills from
+whichever chat is busier - one wall, two platforms, no way to tell from looking
+which line came from where, which is the point:
 
 ```
-/?chart=1
+/?twitch=yourchannel&kick=yourchannel
 ```
 
-`twitch=` and `kick=` point it elsewhere; `-` drops either one.
+**Neither is set by default.** It used to default to the Moon Boys channels,
+which was fine while this ran on one stream and wrong the moment it ran on
+anyone else's: a stranger's first load should not pull somebody else's chat onto
+their screen. `-` also drops either one, for a link that has to override a
+channel rather than inherit it.
 
 Both are read **anonymously** — no token, no account, no server of ours in
 between. Twitch is IRC over WebSocket joined as `justinfan<random>`, a read-only
@@ -366,3 +389,12 @@ Keys: **S** settings, **F** fullscreen, **H** hide the hint.
 ## Deploy
 
 One static file, no build step. Push to GitHub and import the repo on Vercel.
+
+## Licence
+
+MIT - see `LICENSE`. Use it, change it, ship it in your own stream, sell what
+you build with it. No attribution required, though it is always welcome.
+
+The **MoonBoys Line** drawn by `ind=moonboys` is Theo Tzu's own indicator and is
+published free on TradingView; it ships here for the same reason it is published
+there.

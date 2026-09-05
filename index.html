@@ -308,6 +308,9 @@
     color:rgba(234,246,255,.7);opacity:0;transition:opacity .25s ease;backdrop-filter:blur(10px);
   }
   body:hover #gear,#gear:focus-visible{opacity:1}
+  #panel .hintline{
+    margin:-6px 0 2px;font-size:12px;line-height:1.45;color:rgba(234,246,255,.45);
+  }
   body.panel-open #gear{opacity:1}
   #panel{
     position:fixed;top:0;right:0;bottom:0;width:min(370px,92vw);z-index:7;
@@ -407,7 +410,7 @@
 
   <div class="field"><label>Badge (the little pill up top)</label><input type="text" id="f_badge" placeholder="Live soon"></div>
 
-  <div class="field"><label>Show name</label><input type="text" id="f_show" placeholder="Moon Boys Podcast"></div>
+  <div class="field"><label>Show name</label><input type="text" id="f_show" placeholder="Your show"></div>
   <div class="field"><label>Headline</label><input type="text" id="f_headline" placeholder="Stream Starting Soon"></div>
   <div class="field"><label>Subtitle (optional)</label><input type="text" id="f_sub" placeholder="Episode 42"></div>
 
@@ -432,6 +435,12 @@
     <label>YouTube background (URL or ID)</label>
     <input type="text" id="f_video" placeholder="https://youtube.com/watch?v=...">
   </div>
+
+  <div class="row">
+    <div class="field"><label>Twitch channel</label><input type="text" id="f_twitch" placeholder="yourchannel"></div>
+    <div class="field"><label>Kick channel</label><input type="text" id="f_kick" placeholder="yourchannel"></div>
+  </div>
+  <p class="hintline">Chat emotes from either fly up the screen, and a bitcoin mark rises for every message. Leave blank for none.</p>
 
   <div class="field"><label>Accent colour</label><input type="color" id="f_color" value="#7cf2ff"></div>
 
@@ -482,7 +491,7 @@
 
 /* ---------------- defaults ---------------- */
 var DEFAULTS = {
-  show: 'Moon Boys Podcast',
+  show: '',                 // the small line above the headline
   mode: 'soon',             // soon | brb | ending
   headline: '',             // '' = whatever the mode calls itself
   badge: '',                // the little pill above the headline
@@ -500,10 +509,15 @@ var DEFAULTS = {
   vol: '70',                // 0-100, only meaningful with audio=1
   // Roughly the top 30 by cap, stablecoins deliberately absent - a tape that
   // reports USDT at $1.00 all day is wasting the space.
-  // Moon Boys streams to both at once, so both are watched by default and the
-  // wall fills from whichever chat is busier. Set either to '-' to drop it.
-  twitch: 'moonboyspodcast',
-  kick: 'moonboyspodcast',
+  /*
+    NO CHANNEL BY DEFAULT, which is a deliberate change from 'moonboyspodcast'.
+    This is a page anyone can run, and a stranger's first load pulling somebody
+    else's chat onto their screen is a bug wearing a default's clothes. Set
+    either in the panel; the wall fills from whichever chat is busier when both
+    are set.
+  */
+  twitch: '',
+  kick: '',
   emoji: '1',               // '0' to ignore plain unicode emoji
   ticker: 'BTC,ETH,XRP,BNB,SOL,DOGE,ADA,TRX,LINK,AVAX,SUI,XLM,HBAR,BCH,LTC,' +
           'DOT,HYPE,TON,SHIB,UNI,PEPE,NEAR,APT,ICP,ETC,POL,ARB,OP,ATOM,AAVE,BSV',
@@ -1109,24 +1123,24 @@ function drawCrosses(g, marks, x, step, W, H, topGuard){
     var cx = x(m.i);
 
     /*
-      ONE GRADIENT, NOT A BAND WITH A LINE DOWN IT.
-      
-      This started as a flat 20% column with a brighter 1.5px core, so that a
-      wide band on a daily chart would still read as a line. On gold and red
-      that core looked like a bright edition of the column; on silver, whose
-      colour is nearly white already, it looked like something else entirely —
-      Theo: "the silver cross seems to have a weird white line inside it." He
-      is right, and it was a hard edge inside a soft shape.
+      FLAT. NO CORE, NO GRADIENT, NO SOFT EDGE.
 
-      A gradient across the width does the job the core was there for — the
-      column is brightest through the candle it marks — with no edge anywhere
-      to read as a second object.
+      Two wrong turns before this one, both his to call:
+
+      It began as a 20% column with a brighter 1.5px core, so a wide band on a
+      daily chart would still read as a line. On silver, whose colour is nearly
+      white to start with, that core read as a separate object — "the silver
+      cross seems to have a weird white line inside it."
+
+      Replacing the core with a gradient across the width fixed the line and
+      introduced the opposite problem: "the silver cross is a bit blurry on its
+      sides. i was hoping it would be a bit more uniform."
+
+      So: one alpha, edge to edge. A band of glass laid over the candle, which
+      is what he described in the first place — a transparent vertical line,
+      not a glow.
     */
-    var grad = g.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0);
-    grad.addColorStop(0,    'rgba(' + st.rgb + ',.05)');
-    grad.addColorStop(0.5,  'rgba(' + st.rgb + ',.34)');
-    grad.addColorStop(1,    'rgba(' + st.rgb + ',.05)');
-    g.fillStyle = grad;
+    g.fillStyle = 'rgba(' + st.rgb + ',.28)';
     g.fillRect(cx - w / 2, 0, w, H);
 
     if (st.skull) {
@@ -2129,6 +2143,9 @@ $('f_time').value = C.t;
 $('f_date').value = C.d ||
   (TARGET.getFullYear() + '-' + pad(TARGET.getMonth() + 1) + '-' + pad(TARGET.getDate()));
 $('f_video').value = C.v;
+// '-' is the URL's way of saying "none"; the box says it with emptiness.
+$('f_twitch').value = C.twitch === '-' ? '' : C.twitch;
+$('f_kick').value = C.kick === '-' ? '' : C.kick;
 $('f_color').value = /^#[0-9a-f]{6}$/i.test(C.c) ? C.c : '#7cf2ff';
 $('f_chart').checked = C.chart;
 $('f_csym').value = (C.csym === DEFAULTS.csym) ? '' : C.csym;
@@ -2163,6 +2180,9 @@ function buildURL(){
   set('d', $('f_date').value, DEFAULTS.d);
   set('t', $('f_time').value, DEFAULTS.t);
   set('v', videoId($('f_video').value) || $('f_video').value.trim(), DEFAULTS.v);
+  // A leading @ is how everyone writes a handle and neither platform wants it.
+  set('twitch', $('f_twitch').value.trim().replace(/^@/, ''), DEFAULTS.twitch);
+  set('kick', $('f_kick').value.trim().replace(/^@/, ''), DEFAULTS.kick);
   set('c', $('f_color').value, DEFAULTS.c);
   if (C.tz !== '') u.set('tz', C.tz);
   // The tape has no panel control - the top-30 default needs no fiddling - but a
@@ -2220,6 +2240,15 @@ $('copy').addEventListener('click', function(){
 });
 
 function togglePanel(){ document.body.classList.toggle('panel-open'); }
+
+/* FIRST RUN.
+ *
+ * A page opened with no settings at all is somebody's first look at this, and
+ * what they need is the panel — not a countdown to a time they did not set and
+ * a chat they do not own. Every real use carries params, including every OBS
+ * browser source, so this only ever fires on a bare visit.
+ */
+if (!location.search) document.body.classList.add('panel-open');
 $('gear').addEventListener('click', togglePanel);
 
 /* ---------------- keyboard ---------------- */
