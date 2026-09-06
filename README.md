@@ -77,7 +77,7 @@ abbreviation would be right for all of them.
 | `ind` | `moonboys`, `volume`, `macd` &mdash; comma separated; `-` for a bare chart | `moonboys` |
 | `crosses=0` | hide the gold / silver / death cross columns | on |
 | `news` | how many headlines on the chart, or `off` | `3` |
-| `newsfeed` | any RSS URL to read them from | watcher.guru |
+| `newsfeed` | one RSS URL, or several comma-separated and merged | watcher.guru, theblock.co, decrypt.co |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `stars=1` | show the starfield over the background | off |
 
@@ -432,6 +432,19 @@ football feed works exactly as well as a crypto one.
 With a MACD pane open the block lifts above the histogram: the canvas publishes
 its own floor as a CSS variable as it draws, rather than making the stylesheet
 guess.
+
+**It is not Watcher Guru's alerts, and it cannot be.** Theo asked, and the
+answer is worth keeping: `watcher.guru/feed` is their WEBSITE's article feed -
+"Does XRP Have A Real Chance At $2" - not the "JUST IN:" one-liners everyone
+means by Watcher Guru, which are their X account. X has no free API; RSSHub's
+public instance and nitter.net were both tried through rss2json and neither
+answers. `/news/feed` returns the same ten items as `/feed`.
+
+So the nearest honest thing to a wire is **several real feeds merged newest
+first**, deduplicated by headline. Watcher Guru alone was eleven hours behind
+when this was written; The Block and Decrypt were four and eight. Together
+there is always something recent, and one source going down thins the list
+rather than emptying it. `newsfeed=` takes a comma-separated list.
 
 **No crypto news feed can be read by a browser directly.** Checked, not assumed:
 watcher.guru, dailybones.com, Cointelegraph, CoinDesk, Decrypt, Bitcoin

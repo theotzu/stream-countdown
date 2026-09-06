@@ -513,7 +513,7 @@
   <label class="check"><input type="checkbox" id="f_news"> News headlines on the chart</label>
   <div class="field">
     <label>Feed (RSS)</label>
-    <input type="text" id="f_newsfeed" placeholder="https://watcher.guru/feed">
+    <input type="text" id="f_newsfeed" placeholder="one RSS URL, or several separated by commas">
   </div>
 
   <label class="check"><input type="checkbox" id="f_tape"> Live crypto price tape across the top</label>
@@ -635,7 +635,22 @@ var DEFAULTS = {
     the chart is the mode where somebody is reading.
   */
   news: '3',
-  newsfeed: 'https://watcher.guru/feed',
+  /*
+    MORE THAN ONE FEED, COMMA SEPARATED, MERGED NEWEST FIRST.
+
+    Theo, 2026-09-05: "is that watcher guru alerts?" No — and the answer is
+    worth keeping. watcher.guru/feed is their WEBSITE's article feed, the
+    "Does XRP Have A Real Chance At $2" sort of headline. The "JUST IN:"
+    one-liners everyone means by Watcher Guru are their X account, and X has
+    no free API; RSSHub's public instance and nitter.net were both tried and
+    neither answers.
+
+    So the nearest honest thing to a wire is several real feeds merged. Watcher
+    Guru alone was running eleven hours behind when this was written; The Block
+    and Decrypt were four and eight. Together there is always something recent,
+    and one source going quiet or going down just thins the list.
+  */
+  newsfeed: 'https://watcher.guru/feed,https://www.theblock.co/rss.xml,https://decrypt.co/feed',
   transparent: false,
   /*
     THE STARFIELD IS OFF NOW, AND THERE IS NO CHECKBOX FOR IT.
@@ -1407,8 +1422,12 @@ function ageLabel(when){
   return Math.floor(h / 24) + 'd';
 }
 
-function feedHost(){
-  try { return new URL(C.newsfeed).hostname.replace(/^www\./, ''); }
+function feedList(){
+  return String(C.newsfeed).split(',').map(function (u) { return u.trim(); }).filter(Boolean).slice(0, 4);
+}
+
+function feedHost(u){
+  try { return new URL(u).hostname.replace(/^www\./, ''); }
   catch (e) { return 'news'; }
 }
 
@@ -1416,7 +1435,7 @@ function paintNews(items){
   var el = document.getElementById('news');
   if (!el) return;
   if (!items.length) { el.hidden = true; return; }
-  el.innerHTML = '<div class="src">' + esc(feedHost()) + '</div>' +
+  el.innerHTML = '<div class="src">' + esc(feedList().map(feedHost).join(' \u00b7 ')) + '</div>' +
     items.map(function (it) {
       return '<div class="item"><span class="age">' + esc(it.age) + '</span>' +
              '<span class="head">' + esc(it.title) + '</span></div>';
@@ -1424,26 +1443,45 @@ function paintNews(items){
   el.hidden = false;
 }
 
-function pullNews(){
-  var n = newsCount();
-  if (!n || !C.chart) return Promise.resolve();
+function pullOne(feed){
   // No `count`, no `order_by`: those are paid parameters and the free endpoint
-  // answers 422 for them rather than ignoring them. The feed's own order is
-  // newest first anyway, so the slice below does the job.
-  var url = 'https://api.rss2json.com/v1/api.json?rss_url=' +
-            encodeURIComponent(C.newsfeed);
+  // answers 422 for them rather than ignoring them.
+  var url = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed);
   return fetch(url, { cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (d) {
-      if (!d || d.status !== 'ok' || !d.items) return;
-      paintNews(d.items.slice(0, n).map(function (it) {
+      if (!d || d.status !== 'ok' || !d.items) return [];
+      return d.items.map(function (it) {
         // rss2json normalises pubDate to UTC without saying so in the string,
         // which Date parses as local time — hence the explicit Z.
-        var t = Date.parse(String(it.pubDate).replace(' ', 'T') + 'Z');
-        return { title: String(it.title || '').trim(), age: ageLabel(t) };
-      }).filter(function (it) { return it.title; }));
+        return {
+          title: String(it.title || '').trim(),
+          at: Date.parse(String(it.pubDate).replace(' ', 'T') + 'Z')
+        };
+      }).filter(function (it) { return it.title && isFinite(it.at); });
     })
-    .catch(function () { /* no headlines is a quiet absence, not an error */ });
+    // One source being down thins the list; it does not empty it.
+    .catch(function () { return []; });
+}
+
+function pullNews(){
+  var n = newsCount();
+  if (!n || !C.chart) return Promise.resolve();
+  return Promise.all(feedList().map(pullOne)).then(function (lots) {
+    var seen = {}, all = [];
+    lots.forEach(function (list) {
+      list.forEach(function (it) {
+        var key = it.title.toLowerCase();
+        if (seen[key]) return;          // two outlets, one story
+        seen[key] = 1;
+        all.push(it);
+      });
+    });
+    all.sort(function (a, b) { return b.at - a.at; });
+    paintNews(all.slice(0, n).map(function (it) {
+      return { title: it.title, age: ageLabel(it.at) };
+    }));
+  });
 }
 
 /* THE BITCOIN MARK, DRAWN RATHER THAN FETCHED.
