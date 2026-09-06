@@ -76,6 +76,8 @@ abbreviation would be right for all of them.
 | `ci` | timeframe: `1`, `5`, `60`, `1D`, `1W`&hellip; | `1D` |
 | `ind` | `moonboys`, `volume`, `macd` &mdash; comma separated; `-` for a bare chart | `moonboys` |
 | `crosses=0` | hide the gold / silver / death cross columns | on |
+| `news` | how many headlines on the chart, or `off` | `3` |
+| `newsfeed` | any RSS URL to read them from | watcher.guru |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
 | `stars=1` | show the starfield over the background | off |
 
@@ -414,6 +416,41 @@ the edge of the plot would be a highlight on a chart, and this is a marker on
 the screen.
 
 `crosses=0` turns them off.
+
+### Headlines
+
+Theo, 2026-09-05: "what if we had crypto news from daily bones or watcher guru
+on the starting soon chart... it could have a feed on the chart showing like the
+3-4 most recent news posts."
+
+Three headlines in the bottom-left with their age beside them, refreshed every
+five minutes, and **only ever with the chart** - over the lofi loop the page is
+a mood; the chart is the mode where somebody is reading. `news=4` shows four,
+`news=off` shows none, and `newsfeed=` takes any RSS URL, so an esports or
+football feed works exactly as well as a crypto one.
+
+With a MACD pane open the block lifts above the histogram: the canvas publishes
+its own floor as a CSS variable as it draws, rather than making the stylesheet
+guess.
+
+**No crypto news feed can be read by a browser directly.** Checked, not assumed:
+watcher.guru, dailybones.com, Cointelegraph, CoinDesk, Decrypt, Bitcoin
+Magazine, The Block and CryptoPanic were each fetched from a page origin and
+every one failed on CORS. RSS is a server-to-server format and none of them send
+an `Access-Control-Allow-Origin` header.
+
+This page has no server and is meant to run from a file on disk, so the choice
+was to add a serverless function and stop being one static file, or to go
+through something that already re-serves feeds with CORS. **rss2json** does,
+with no key, in about 400ms. Do not send it `count` or `order_by` - those are
+paid parameters and the free endpoint answers 422 rather than ignoring them.
+
+⚠️ **That is a third party and it can go away.** It is rate-limited on the free
+tier, and the day it stops answering the headlines simply do not appear - no
+error on screen, no gap in the layout, nothing for a viewer to notice. That is
+the whole failure plan, and it is deliberate. The five-minute poll only runs
+while the tab is visible: a stream up for six hours should not have made 72
+requests to somebody's free tier for a screen nobody was looking at.
 
 ### Why the chart is TradingView and not aggr
 

@@ -125,6 +125,33 @@
   }
   #coin .base{font-size:27px;font-weight:700;color:#eaf6ff}
   #coin .tf{font-size:14px;font-weight:600;color:rgba(234,246,255,.62)}
+  /* Headlines sit above the scrim for the same reason the coin badge does: a
+     line nobody can read is not a line. --news-bottom is written by the chart
+     as it draws, so with a MACD pane open the block lifts clear of it instead
+     of lying across the histogram. */
+  #news{
+    position:fixed;left:14px;bottom:var(--news-bottom,34px);z-index:3;
+    width:min(460px,42vw);pointer-events:none;
+    display:flex;flex-direction:column;gap:7px;
+  }
+  #news[hidden]{display:none}
+  #news .src{
+    font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:rgba(234,246,255,.4);
+  }
+  #news .item{
+    display:flex;gap:9px;align-items:baseline;
+    font-size:13.5px;line-height:1.35;color:rgba(234,246,255,.9);
+    text-shadow:0 1px 6px rgba(2,4,10,.85);
+  }
+  #news .age{
+    flex:0 0 auto;font-size:11px;font-variant-numeric:tabular-nums;
+    color:var(--accent);opacity:.85;min-width:30px;
+  }
+  #news .head{
+    overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;
+    -webkit-line-clamp:2;
+  }
   #chart{position:fixed;inset:0;z-index:0;overflow:hidden}
   #chart iframe{width:100%;height:100%;border:0}
   /* A chart is there to be read, so it does not get the full cinematic murk a
@@ -391,6 +418,7 @@
 
 <canvas id="mb"></canvas>
 <div id="coin" hidden aria-hidden="true"></div>
+<div id="news" hidden aria-hidden="true"></div>
 <div id="chart"></div>
 <div id="bg"></div>
 <canvas id="stars"></canvas>
@@ -480,6 +508,12 @@
   <div class="field">
     <label>Indicators (comma separated)</label>
     <input type="text" id="f_ind" placeholder="moonboys, volume, macd &mdash; &lsquo;-&rsquo; for none">
+  </div>
+
+  <label class="check"><input type="checkbox" id="f_news"> News headlines on the chart</label>
+  <div class="field">
+    <label>Feed (RSS)</label>
+    <input type="text" id="f_newsfeed" placeholder="https://watcher.guru/feed">
   </div>
 
   <label class="check"><input type="checkbox" id="f_tape"> Live crypto price tape across the top</label>
@@ -587,6 +621,21 @@ var DEFAULTS = {
     for it.
   */
   ping: '\uD83D\uDCAC',       // 💬
+
+  /*
+    HEADLINES ON THE CHART. Theo, 2026-09-05: "what if we had crypto news from
+    daily bones or watcher guru on the starting soon chart... it could have a
+    feed on the chart showing like the 3-4 most recent news posts."
+
+    `news` is how many to show (0 or 'off' for none), `newsfeed` is any RSS URL
+    — Watcher Guru by default, but an esports or football feed works exactly as
+    well, which is the point of it being a URL rather than a switch.
+
+    It only ever appears with the chart. Over the lofi loop the page is a mood;
+    the chart is the mode where somebody is reading.
+  */
+  news: '3',
+  newsfeed: 'https://watcher.guru/feed',
   transparent: false,
   /*
     THE STARFIELD IS OFF NOW, AND THERE IS NO CHECKBOX FOR IT.
@@ -1314,6 +1363,89 @@ function drawCrosses(g, marks, x, step, W, bottom, topGuard){
   });
 }
 
+/* HEADLINES, WITHOUT A SERVER OF OUR OWN.
+ *
+ * Theo, 2026-09-05: "how about we update the news every 5 mins from watcher
+ * guru... showing like the 3-4 most recent news posts."
+ *
+ * 🔴 NO CRYPTO NEWS FEED CAN BE READ BY A BROWSER DIRECTLY. Checked, not
+ * assumed: watcher.guru, dailybones.com, Cointelegraph, CoinDesk, Decrypt,
+ * Bitcoin Magazine, The Block and CryptoPanic were all fetched from a page
+ * origin and every one of them failed on CORS. RSS is a server-to-server
+ * format and none of these send an Access-Control-Allow-Origin header.
+ *
+ * This page has no server and is meant to run from a file on disk, so the
+ * options were: add a serverless function and stop being one static file, or
+ * go through something that already re-serves feeds with CORS. rss2json does,
+ * with no key, and returns Watcher Guru's feed as JSON in about 400ms.
+ *
+ * ⚠️ THAT IS A THIRD PARTY AND IT CAN GO AWAY. It is rate-limited on the free
+ * tier, and the day it stops answering, the headlines simply do not appear —
+ * no error on screen, no gap in the layout, nothing for a viewer to notice.
+ * That is the whole failure plan and it is deliberate.
+ *
+ * Every five minutes, and only while the tab is visible: a stream that has been
+ * up for six hours should not have made 72 requests to somebody's free tier for
+ * a screen nobody was looking at.
+ */
+var NEWS_MS = 300000;
+
+function newsCount(){
+  var v = String(C.news).trim().toLowerCase();
+  if (!v || v === '0' || v === 'off' || v === '-') return 0;
+  var n = parseInt(v, 10);
+  return isNaN(n) ? 3 : Math.max(1, Math.min(6, n));
+}
+
+/** "4m", "3h", "2d" — a headline's age is the only date worth printing here. */
+function ageLabel(when){
+  var mins = Math.floor((Date.now() - when) / 60000);
+  if (!isFinite(mins) || mins < 0) return '';
+  if (mins < 60) return Math.max(1, mins) + 'm';
+  var h = Math.floor(mins / 60);
+  if (h < 48) return h + 'h';
+  return Math.floor(h / 24) + 'd';
+}
+
+function feedHost(){
+  try { return new URL(C.newsfeed).hostname.replace(/^www\./, ''); }
+  catch (e) { return 'news'; }
+}
+
+function paintNews(items){
+  var el = document.getElementById('news');
+  if (!el) return;
+  if (!items.length) { el.hidden = true; return; }
+  el.innerHTML = '<div class="src">' + esc(feedHost()) + '</div>' +
+    items.map(function (it) {
+      return '<div class="item"><span class="age">' + esc(it.age) + '</span>' +
+             '<span class="head">' + esc(it.title) + '</span></div>';
+    }).join('');
+  el.hidden = false;
+}
+
+function pullNews(){
+  var n = newsCount();
+  if (!n || !C.chart) return Promise.resolve();
+  // No `count`, no `order_by`: those are paid parameters and the free endpoint
+  // answers 422 for them rather than ignoring them. The feed's own order is
+  // newest first anyway, so the slice below does the job.
+  var url = 'https://api.rss2json.com/v1/api.json?rss_url=' +
+            encodeURIComponent(C.newsfeed);
+  return fetch(url, { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (d) {
+      if (!d || d.status !== 'ok' || !d.items) return;
+      paintNews(d.items.slice(0, n).map(function (it) {
+        // rss2json normalises pubDate to UTC without saying so in the string,
+        // which Date parses as local time — hence the explicit Z.
+        var t = Date.parse(String(it.pubDate).replace(' ', 'T') + 'Z');
+        return { title: String(it.title || '').trim(), age: ageLabel(t) };
+      }).filter(function (it) { return it.title; }));
+    })
+    .catch(function () { /* no headlines is a quiet absence, not an error */ });
+}
+
 /* THE BITCOIN MARK, DRAWN RATHER THAN FETCHED.
  *
  * Theo, 2026-09-05: "use the actual btc logo tho. not some orange circle that
@@ -1557,6 +1689,15 @@ function drawMoonBoys(){
     var floorY = wantsMacd ? padT + priceH : H;
     drawCrosses(g, crossesIn(start, view, f, sl, mac), x, step, W, floorY, tapeGuard);
   }
+
+  /*
+    Where the headlines are allowed to sit. The canvas is the only thing that
+    knows how tall the MACD pane came out, so it publishes its floor rather
+    than making the CSS guess — with MACD open the block lifts above the
+    histogram; without it, it sits just above the caption line.
+  */
+  document.documentElement.style.setProperty('--news-bottom',
+    (wantsMacd ? Math.round(H - (padT + priceH) + 14) : 34) + 'px');
 
   // ---- MACD, on the chart's own timeframe ----
   if (wantsMacd) {
@@ -2053,6 +2194,14 @@ function macdOf(closes){
            }) };
 }
 
+/* Headlines belong to the chart, either chart. */
+if (C.chart && newsCount()) {
+  pullNews();
+  setInterval(function () {
+    if (document.visibilityState === 'visible') pullNews();
+  }, NEWS_MS);
+}
+
 if (C.chart && wantsMoonBoys) {
   document.body.classList.add('charted', 'moonboys');
   // Straight away: Bitcoin's mark is in this file and waits for nothing. Any
@@ -2315,6 +2464,9 @@ $('f_kick').value = C.kick === '-' ? '' : C.kick;
   link, and the wall stops pinging. A box that hid the default behind grey
   placeholder text would make "no mark" and "the default mark" look identical.
 */
+$('f_news').checked = newsCount() > 0;
+$('f_newsfeed').value = (C.newsfeed === DEFAULTS.newsfeed) ? '' : C.newsfeed;
+
 var tapeOn = tapeSymbols().length > 0;
 $('f_tape').checked = tapeOn;
 // 'top' is the preset, so the box stays empty for it and shows only a list
@@ -2367,6 +2519,8 @@ function buildURL(){
   else set('ping', ping, DEFAULTS.ping);
   set('c', $('f_color').value, DEFAULTS.c);
   if (C.tz !== '') u.set('tz', C.tz);
+  if (!$('f_news').checked) u.set('news', 'off');
+  else set('newsfeed', $('f_newsfeed').value.trim(), DEFAULTS.newsfeed);
   if ($('f_tape').checked) {
     var syms = $('f_ticker').value.trim();
     u.set('ticker', syms === '' ? 'top' : syms);
@@ -2432,6 +2586,9 @@ function liveApply(){
   C.in = $('f_in').value.trim();
   C.c = $('f_color').value;
   C.ping = $('f_ping').value.trim() || 'off';
+  C.news = $('f_news').checked ? (newsCount() || 3) : 'off';
+  C.newsfeed = $('f_newsfeed').value.trim() || DEFAULTS.newsfeed;
+  refreshNews();
   C.transparent = $('f_transparent').checked;
   /*
     Typing a time IS giving one, so the ending mode's clock comes back — and
@@ -2459,6 +2616,17 @@ function liveApply(){
   refreshURL();
 }
 
+/* Headlines can change without a reload — but not on every keystroke of a URL
+ * that is only half typed. A beat of quiet, then one request.
+ */
+var newsTimer = null;
+function refreshNews(){
+  var el = document.getElementById('news');
+  if (!newsCount() || !C.chart) { if (el) el.hidden = true; return; }
+  clearTimeout(newsTimer);
+  newsTimer = setTimeout(pullNews, 800);
+}
+
 /* The fields a reload cannot be avoided for, and the note that says so. */
 var RELOAD_FIELDS = ['f_video', 'f_twitch', 'f_kick', 'f_chart', 'f_csym',
                      'f_ci', 'f_ind', 'f_audio', 'f_vol', 'f_tape', 'f_ticker'];
@@ -2466,7 +2634,7 @@ var RELOAD_FIELDS = ['f_video', 'f_twitch', 'f_kick', 'f_chart', 'f_csym',
 (function wirePanel(){
   var live = ['f_mode', 'f_show', 'f_headline', 'f_sub', 'f_badge', 'f_endline',
               'f_endbadge', 'f_pre', 'f_time', 'f_date', 'f_in', 'f_color',
-              'f_ping', 'f_transparent'];
+              'f_ping', 'f_transparent', 'f_news', 'f_newsfeed'];
   live.forEach(function (id) {
     var el = $(id);
     if (!el) return;
