@@ -64,7 +64,20 @@
   .tape-ch.dn{color:#ff7a7a}
   /* Nothing may sit under the tape. */
   body.taped main{padding-top:calc(5vh + 46px)}
-  body.transparent #tape{display:none}
+  /*
+    🔴 This was `body.transparent #tape{display:none}`, and the JS below
+    refused to start the tape at all in overlay mode.
+
+    Theo, 2026-09-13: "its not giving me the ticker at the top." The
+    assumption was that overlay mode meant "put the countdown's words over
+    your own stream", so the room — tape, chart, starfield — came off with
+    the background. But the tape over a live stream is the single most useful
+    thing this page can be for a crypto show, and it is the only piece of the
+    room that is chrome rather than scenery.
+
+    So overlay mode keeps it, and `ticker` alone decides. Its own translucent
+    bar gives it a ground, so it does not need the page to have one.
+  */
   @media (prefers-reduced-motion: reduce){ #tapeTrack{animation:none} }
 
   /* The emote wall. Above everything, touching nothing - it must never take a
@@ -406,7 +419,21 @@
     font-size:10px;letter-spacing:.2em;text-transform:uppercase;
     color:rgba(234,246,255,.25);transition:opacity .6s ease}
   #hint.hide{opacity:0}
-  body.transparent #hint,body.transparent #gear{display:none}
+  /*
+    🔴 This hid #gear outright, which is why Theo found overlay mode a
+    one-way door: "it loses its settings icon in the top right."
+
+    It has to be invisible on stream — a gear burned into the broadcast is
+    worse than no gear. But it already was: the gear sits at opacity 0 and
+    `body:hover #gear` above brings it back, and an OBS browser source
+    receives no pointer events at all unless you right-click it and choose
+    Interact. Hover was always the right signal; `display:none` was simply
+    outranking it. Only #hint needs to go, because that one is on a timer
+    rather than a hover.
+
+    `S` still toggles the panel too, as it always did.
+  */
+  body.transparent #hint{display:none}
   @media (max-width:640px){.clock{gap:4px}.sep{display:none}}
 </style>
 </head>
@@ -2175,7 +2202,7 @@ function pollGecko(){
   return fromGecko(syms).then(absorb);
 }
 
-if (!C.transparent && tapeSymbols().length) {
+if (tapeSymbols().length) {
   loadLogos().then(function () {
     paintCoinBadge();        // repaint once a non-BTC coin has its artwork
     pollBinance();
