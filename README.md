@@ -79,8 +79,6 @@ abbreviation would be right for all of them.
 | `news` | how many headlines on the chart, or `off` | `3` |
 | `newsfeed` | one RSS URL, or several comma-separated and merged | watcher.guru, theblock.co, decrypt.co |
 | `transparent=1` | drop the background entirely, to overlay on the real stream in OBS | off |
-| `stage=1` | the full OBS overlay &mdash; frame for a camera and a screen share, tape on top | off |
-| `guides=1` | with `stage`, print the OBS position and size inside each box | off |
 | `stars=1` | show the starfield over the background | off |
 
 Examples:
@@ -89,61 +87,6 @@ Examples:
 - `/?mode=brb&in=15` — back in fifteen minutes
 - `/?mode=ending` — wrapping up, no clock
 - `/?chart=1&audio=1` — live BTC chart with the music still playing
-
-## Stage &mdash; the full OBS overlay
-
-Theo, 2026-09-13: "could we just like build an entire overlay for obs. like we
-will have a spot for a camera and a spot for the screenshare, and the charts
-ticker at the top."
-
-```
-/?stage=1
-```
-
-Black and red, the edge language from the old theotzu.com: a hairline frame,
-an L-bracket at each corner, a soft red glow. Screen share middle left, camera
-small in the bottom right, the price tape across the top, and the emote wall
-still flying &mdash; in the gutter beside the share rather than across it, since
-an emote over somebody's chart is the one place this page can get in the way of
-the show.
-
-`stage=1` carries the rest with it: it turns transparency on, turns the tape on,
-and takes the countdown words away unless you name a `mode` yourself. Everything
-else is still yours to set.
-
-### Your camera and your screen share are not in this page
-
-And they must not be. A browser source would need camera and screen permissions
-inside OBS's own Chromium, encode the video a second time, and take control of
-the inputs away from the program that is meant to own them.
-
-So this draws the frame and nothing else. **The boxes are holes.** Your real
-sources sit *underneath* the browser source in OBS, and you size them to fit.
-You keep OBS's cropping, its mirroring and its filters, and the overlay cannot
-break your picture because it never touches it.
-
-### Lining it up, once
-
-1. Add a **Browser Source**, 1920&times;1080, pointed at your `?stage=1` link.
-   Put it at the **top** of the source list.
-2. Add your **Video Capture Device** and **Display Capture** below it.
-3. Open the overlay with `&guides=1` &mdash; each box prints its own numbers.
-4. For each source: right-click &rarr; **Transform** &rarr; **Edit Transform**,
-   and type them in.
-
-| | Position | Size |
-| --- | --- | --- |
-| Screen share | `40, 200` | `1280 x 720` |
-| Camera | `1400, 770` | `480 x 270` |
-
-Both are exact fractions of 1080p &mdash; the share is two thirds, the camera a
-quarter &mdash; so a 1080p capture scales onto them cleanly with nothing to nudge
-by hand.
-
-5. Drop `&guides=1` and you are live.
-
-The frame is letterboxed to 16:9, so it previews true in an ordinary browser
-window as well &mdash; the boxes stay 16:9 instead of stretching with the tab.
 
 ## Modes
 

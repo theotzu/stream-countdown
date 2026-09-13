@@ -434,82 +434,12 @@
     `S` still toggles the panel too, as it always did.
   */
   body.transparent #hint{display:none}
-
-  /* ---------------- the stage ----------------
-     `stage=1`. A frame with holes in it.
-
-     The camera and the screen share are NOT in this page and must not be.
-     A browser source would need getUserMedia/getDisplayMedia inside OBS's
-     own Chromium, encode the video a second time, and take control of the
-     inputs away from the program that is supposed to own them. So the page
-     draws only chrome — the tape, the edges, the corner brackets — and is
-     transparent where the picture goes. OBS keeps its own Video Capture
-     Device and Display Capture underneath, positioned into the holes, and
-     keeps its cropping and its mirroring with them.
-
-     Positions are percentages of a 1920x1080 canvas, so the frame previews
-     correctly in any window while the numbers `guides=1` prints stay the
-     exact pixels to type into OBS's Transform dialog. */
-  #stage{position:fixed;inset:0;z-index:7;pointer-events:none;
-    display:grid;place-items:center}
-  body:not(.stage) #stage{display:none}
-  /*
-    A 16:9 canvas, letterboxed inside whatever the window is.
-
-    The boxes are positioned in percentages so the frame previews at any size,
-    but a percentage of a window that is not 16:9 makes a 16:9 box stop being
-    one — which would have you lining OBS up against a lie in a browser tab.
-    This keeps the frame true everywhere and fills the source exactly at
-    1920x1080, where it is actually used.
-  */
-  #stageCanvas{position:relative;
-    width:min(100%, calc(100vh * 16 / 9));
-    height:min(100%, calc(100vw * 9 / 16));}
-
-  .stage-box{
-    position:absolute;
-    border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);
-    border-radius:10px;
-    box-shadow:0 0 26px color-mix(in srgb,var(--accent) 18%,transparent),
-               inset 0 0 44px color-mix(in srgb,var(--accent) 10%,transparent);
-  }
-  /* Corner brackets, the edge language from theotzu.com: an L at each corner
-     rather than a heavier border, so the frame reads without closing in. */
-  .stage-box i{position:absolute;width:20px;height:20px;border:2px solid var(--accent)}
-  .stage-box i:nth-of-type(1){top:-1px;left:-1px;border-right:0;border-bottom:0;border-radius:10px 0 0 0}
-  .stage-box i:nth-of-type(2){top:-1px;right:-1px;border-left:0;border-bottom:0;border-radius:0 10px 0 0}
-  .stage-box i:nth-of-type(3){bottom:-1px;right:-1px;border-left:0;border-top:0;border-radius:0 0 10px 0}
-  .stage-box i:nth-of-type(4){bottom:-1px;left:-1px;border-right:0;border-top:0;border-radius:0 0 0 10px}
-
-  /* The setup aid. Off on stream; on while you are lining OBS up. */
-  .stage-box b{display:none}
-  body.guides .stage-box{background:color-mix(in srgb,var(--accent) 12%,transparent)}
-  body.guides .stage-box b{
-    display:block;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    text-align:center;font-weight:600;font-variant-numeric:tabular-nums;
-    font-size:15px;line-height:1.7;letter-spacing:.08em;text-transform:uppercase;
-    color:var(--ink);text-shadow:0 2px 10px rgba(0,0,0,.9);
-  }
-  body.guides .stage-box b span{display:block;font-size:24px;letter-spacing:.16em;color:var(--accent)}
-
-  /* The wall keeps flying, but in the gutter beside the share rather than
-     across it — an emote over somebody's chart is the one place this page
-     can actively get in the way of the show. */
-  body.stage #emotes{inset:auto;top:4.3%;bottom:30%;right:0;left:68.75%}
-
   @media (max-width:640px){.clock{gap:4px}.sep{display:none}}
 </style>
 </head>
 <body>
 
 <div id="emotes" aria-hidden="true"></div>
-
-<div id="stage" hidden aria-hidden="true">
-  <div id="stageCanvas">
-    <div class="stage-box" id="stShare"><i></i><i></i><i></i><i></i><b></b></div>
-    <div class="stage-box" id="stCam"><i></i><i></i><i></i><i></i><b></b></div>
-  </div>
-</div>
 
 <div id="tape" hidden aria-label="Live prices"><div id="tapeTrack"></div></div>
 
@@ -623,10 +553,6 @@
   <div class="field"><label>Volume (0&ndash;100)</label><input type="number" id="f_vol" min="0" max="100" step="5" placeholder="70"></div>
 
   <label class="check"><input type="checkbox" id="f_transparent"> Transparent (OBS overlay mode)</label>
-
-  <label class="check"><input type="checkbox" id="f_stage"> Stage &mdash; full OBS overlay (camera + screen share)</label>
-  <label class="check"><input type="checkbox" id="f_guides"> &nbsp;&nbsp;&#8627; show the OBS numbers on the boxes</label>
-  <p class="hintline">The stage draws the frame only. Put your camera and screen share <b>underneath</b> this browser source in OBS and size them to the boxes &mdash; tick the guides and the numbers are printed inside each one.</p>
 
   <button class="btn" id="apply">Apply</button>
   <p class="hintline reloadnote">Everything else is already live on the page behind this panel. Apply reloads, which is only needed for the video, the chat channels and the chart.</p>
@@ -754,17 +680,6 @@ var DEFAULTS = {
   newsfeed: 'https://watcher.guru/feed,https://www.theblock.co/rss.xml,https://decrypt.co/feed',
   transparent: false,
   /*
-    THE STAGE. Theo, 2026-09-13: "could we just like build an entire overlay
-    for obs. like we will have a spot for a camera and a spot for the
-    screenshare, and the charts ticker at the top."
-
-    One layout, his: share middle-left, camera small in the bottom right, tape
-    across the top, emote wall still flying. `guides=1` puts the OBS numbers on
-    the boxes while you line the sources up.
-  */
-  stage: false,
-  guides: false,
-  /*
     THE STARFIELD IS OFF NOW, AND THERE IS NO CHECKBOX FOR IT.
 
     Theo, 2026-09-05: "i think we could hide the star field by default as well.
@@ -858,34 +773,6 @@ Object.keys(DEFAULTS).forEach(function(k){
   }
 });
 if (q.get('overlay') === '1') C.transparent = true;
-
-/* THE STAGE LAYOUT, in 1920x1080 pixels — the one source of truth for both the
- * frame on screen and the numbers guides=1 prints for OBS.
- *
- * Both boxes are exact fractions of 1080p: the share is two thirds (a 1080p
- * display capture scaled to 66.7% lands on it dead on), the camera a quarter.
- * Nobody has to nudge anything by hand.
- */
-var CANVAS = { w: 1920, h: 1080 };
-var STAGE = {
-  share: { label: 'Screen share', x: 40,   y: 200, w: 1280, h: 720 },
-  cam:   { label: 'Camera',       x: 1400, y: 770, w: 480,  h: 270 }
-};
-
-/*
- * The stage is an overlay by definition, so it carries transparency with it,
- * and it turns the tape on because a tape across the top is half of what was
- * asked for. It also silences the countdown copy unless a mode was named:
- * "Stream Starting Soon" across a live screen share is not a thing anyone
- * wants, and every other switch here is still free to be set by hand.
- */
-if (C.stage) {
-  C.transparent = true;
-  if (q.get('mode') === null) C.mode = 'bare';
-  if (q.get('ticker') === null || q.get('ticker') === '') C.ticker = 'top';
-  // Black and red, the old theotzu.com edges — unless a colour was asked for.
-  if (q.get('c') === null) C.c = '#ff1f3d';
-}
 
 /* WHAT THE USER ACTUALLY WROTE, kept apart from what is being shown.
  *
@@ -1009,27 +896,6 @@ function localZoneLabel(when){
   return 'UTC' + sign + hh + (mm ? ':' + String(mm).padStart(2, '0') : '');
 }
 
-/* Place the two boxes, and write the numbers OBS needs inside them.
- *
- * Percentages on screen so the frame previews at any window size; the pixel
- * figures in the labels are the 1920x1080 ones, because those are what gets
- * typed into OBS (right-click the source, Transform, Edit Transform).
- */
-function layoutStage(){
-  Object.keys(STAGE).forEach(function (key) {
-    var box = STAGE[key];
-    var el = $(key === 'share' ? 'stShare' : 'stCam');
-    el.style.left   = (box.x / CANVAS.w * 100) + '%';
-    el.style.top    = (box.y / CANVAS.h * 100) + '%';
-    el.style.width  = (box.w / CANVAS.w * 100) + '%';
-    el.style.height = (box.h / CANVAS.h * 100) + '%';
-    el.querySelector('b').innerHTML =
-      '<span>' + esc(box.label) + '</span>' +
-      esc(box.w + ' \u00d7 ' + box.h) + '<br>' +
-      esc('at ' + box.x + ', ' + box.y);
-  });
-}
-
 /* Everything the config puts on the screen, written in one place so that a
  * live edit is the same code path as the first paint.
  */
@@ -1041,10 +907,6 @@ function paintChrome(){
   $('badgeText').textContent = BADGE;
   document.title = (C.show ? C.show + ' — ' : '') + C.headline;
   document.body.classList.toggle('transparent', !!C.transparent);
-  document.body.classList.toggle('stage', !!C.stage);
-  document.body.classList.toggle('guides', !!C.stage && !!C.guides);
-  $('stage').hidden = !C.stage;
-  if (C.stage) layoutStage();
   document.body.classList.toggle('nostars', String(C.stars) !== '1');
   document.body.classList.toggle('no-clock', NO_CLOCK);
   document.body.classList.toggle('bare', !!MODE.bare);
@@ -2690,8 +2552,6 @@ $('f_ind').value = C.ind;
 $('f_audio').checked = C.audio;
 $('f_vol').value = VOL;
 $('f_transparent').checked = C.transparent;
-$('f_stage').checked = C.stage;
-$('f_guides').checked = C.guides;
 
 /* What the clock boxes looked like before anyone touched them. */
 var PREFILL = { t: $('f_time').value, d: $('f_date').value };
@@ -2741,13 +2601,7 @@ function buildURL(){
     var v = $('f_vol').value.trim();
     if (v !== '' && v !== DEFAULTS.vol) u.set('vol', v);
   }
-  if ($('f_stage').checked) {
-    /* The stage implies transparency, so saying both in the link is noise. */
-    u.set('stage', '1');
-    if ($('f_guides').checked) u.set('guides', '1');
-  } else if ($('f_transparent').checked) {
-    u.set('transparent', '1');
-  }
+  if ($('f_transparent').checked) u.set('transparent', '1');
   if (String(C.stars) === '1') u.set('stars', '1');
   var s = u.toString();
   return location.origin + location.pathname + (s ? '?' + s : '');
@@ -2801,10 +2655,6 @@ function liveApply(){
   C.newsfeed = $('f_newsfeed').value.trim() || DEFAULTS.newsfeed;
   refreshNews();
   C.transparent = $('f_transparent').checked;
-  C.stage = $('f_stage').checked;
-  C.guides = $('f_guides').checked;
-  /* Ticking the stage in the panel should look like opening a stage link. */
-  if (C.stage) C.transparent = true;
   /*
     Typing a time IS giving one, so the ending mode's clock comes back — and
     clearing it again takes the clock away, which is why this is measured
@@ -2849,8 +2699,7 @@ var RELOAD_FIELDS = ['f_video', 'f_twitch', 'f_kick', 'f_chart', 'f_csym',
 (function wirePanel(){
   var live = ['f_mode', 'f_show', 'f_headline', 'f_sub', 'f_badge', 'f_endline',
               'f_endbadge', 'f_pre', 'f_time', 'f_date', 'f_in', 'f_color',
-              'f_ping', 'f_transparent', 'f_stage', 'f_guides', 'f_news',
-              'f_newsfeed'];
+              'f_ping', 'f_transparent', 'f_news', 'f_newsfeed'];
   live.forEach(function (id) {
     var el = $(id);
     if (!el) return;
