@@ -29,10 +29,25 @@
   #tape{
     position:fixed;top:0;left:0;right:0;z-index:5;height:46px;overflow:hidden;
     display:flex;align-items:center;
-    background:rgba(8,10,16,.72);
-    backdrop-filter:saturate(140%) blur(10px);
-    -webkit-backdrop-filter:saturate(140%) blur(10px);
-    border-bottom:1px solid rgba(255,255,255,.08);
+    /*
+      A BLACK BAR, NOT A TINT.
+
+      Theo, 2026-09-13: "I'm noticing it's a bit transparent... I think we
+      could just have that as a black bar at the top there with the tickers
+      ticking along... it's a little bit too transparent, where it's almost
+      hard to read."
+
+      It was rgba(8,10,16,.72) over a blur. That reads fine over the page's own
+      flat gradient, which is what it was drawn against — but in overlay mode
+      it sits on live video, and a 28% window onto whatever the stream is doing
+      behind four-point type is exactly as legible as that sounds.
+
+      So: solid. The blur goes with it — there is nothing to see through any
+      more, and a backdrop-filter over live video is real GPU work in OBS for
+      an effect nobody can now observe.
+    */
+    background:#05070a;
+    border-bottom:1px solid rgba(255,255,255,.10);
     font-variant-numeric:tabular-nums;
   }
   #tape[hidden]{display:none}
