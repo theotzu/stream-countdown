@@ -180,6 +180,18 @@
     overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;
     -webkit-line-clamp:2;
   }
+  /* A fault has to be legible at a glance without shouting over the chart:
+     the flag is small and amber, the unavailable row is dimmed. Neither is an
+     alert box - this sits on a stream, and a red banner would be worse than
+     the silence it replaces. */
+  #news .flag{
+    margin-left:9px;letter-spacing:.14em;color:#ffcf7a;opacity:.95;
+  }
+  #news.stale .head,#news.bad .head{color:rgba(234,246,255,.62)}
+  #news .item.warn .head{
+    color:#ffcf7a;opacity:.9;font-style:italic;-webkit-line-clamp:1;
+  }
+  #news .item.warn .age{color:#ffcf7a;opacity:.6}
   #chart{position:fixed;inset:0;z-index:0;overflow:hidden}
   #chart iframe{width:100%;height:100%;border:0}
   /* A chart is there to be read, so it does not get the full cinematic murk a
@@ -1431,21 +1443,72 @@ function drawCrosses(g, marks, x, step, W, bottom, topGuard){
  * origin and every one of them failed on CORS. RSS is a server-to-server
  * format and none of these send an Access-Control-Allow-Origin header.
  *
- * This page has no server and is meant to run from a file on disk, so the
- * options were: add a serverless function and stop being one static file, or
- * go through something that already re-serves feeds with CORS. rss2json does,
- * with no key, and returns Watcher Guru's feed as JSON in about 400ms.
+ * ⚠️ 2026-10-26: IT WENT AWAY, EXACTLY AS PREDICTED, AND NOBODY WAS TOLD.
  *
- * ⚠️ THAT IS A THIRD PARTY AND IT CAN GO AWAY. It is rate-limited on the free
- * tier, and the day it stops answering, the headlines simply do not appear —
- * no error on screen, no gap in the layout, nothing for a viewer to notice.
- * That is the whole failure plan and it is deliberate.
+ * The answer used to be api.rss2json.com — keyless, CORS-friendly, and a third
+ * party. The note here said it could vanish and that the headlines would then
+ * simply not appear, with no error on screen and nothing for a viewer to
+ * notice. That is precisely what happened: rss2json now sits behind a
+ * Cloudflare interactive challenge and answers 403 to anything that is not a
+ * human with a cookie jar. A cross-origin fetch() cannot solve an interactive
+ * challenge, so the ticker had been silently empty for some time.
+ *
+ * Accepting a silent failure was the real mistake, not picking that proxy. A
+ * screen an audience watches must not fail by showing nothing — an empty bar
+ * looks deliberate, so the bug lasted months. See paintNews: this now has
+ * visible stale and unavailable states, and a last-good cache behind them.
+ *
+ * The feeds were never the problem; the middleman was. All three outlets
+ * return valid RSS to a direct server fetch. So the fetch happens on OUR
+ * server now — /api/news, which reads the feeds directly and returns JSON on
+ * our own origin. CORS is a browser rule and does not apply there. No key, no
+ * middleman, no dependency, and the page is still one static file.
  *
  * Every five minutes, and only while the tab is visible: a stream that has been
- * up for six hours should not have made 72 requests to somebody's free tier for
- * a screen nobody was looking at.
+ * up for six hours should not make 72 requests for a screen nobody watched.
  */
 var NEWS_MS = 300000;
+
+/* Four missed polls. Tolerant of a blip, but visibly stale long before the
+ * headlines are old enough for a viewer to notice the dates themselves.
+ */
+var NEWS_STALE_MS = 1200000;
+
+/* Same-origin when served over http(s) — Vercel routes /api/news to the
+ * function beside this file. But this page is also meant to run from a file on
+ * disk in OBS, where a relative path resolves to file:///api/news and fails.
+ * In that case, and only that case, fall back to the deployed origin.
+ */
+function newsApi(){
+  var rel = '/api/news';
+  if (location.protocol === 'http:' || location.protocol === 'https:') return rel;
+  return 'https://stream-countdown-alpha.vercel.app' + rel;
+}
+
+/* LAST GOOD, SO AN OUTAGE DEGRADES INSTEAD OF BLANKING.
+ *
+ * localStorage throws in a few embedded webviews rather than returning null,
+ * and a thrown quota error must not take the ticker down with it — hence the
+ * in-memory copy, which is what actually gets read during a session.
+ */
+var newsMem = null;
+var NEWS_KEY = 'sc.news.lastgood';
+
+function newsCacheRead(){
+  if (newsMem) return newsMem;
+  try {
+    var raw = localStorage.getItem(NEWS_KEY);
+    if (!raw) return null;
+    var d = JSON.parse(raw);
+    if (d && d.items && d.items.length) { newsMem = d; return d; }
+  } catch (e) {}
+  return null;
+}
+
+function newsCacheWrite(d){
+  newsMem = d;
+  try { localStorage.setItem(NEWS_KEY, JSON.stringify(d)); } catch (e) {}
+}
 
 function newsCount(){
   var v = String(C.news).trim().toLowerCase();
@@ -1473,57 +1536,96 @@ function feedHost(u){
   catch (e) { return 'news'; }
 }
 
-function paintNews(items){
+/* THE FAILURE IS VISIBLE NOW, WHICH IS THE WHOLE POINT OF THIS REWRITE.
+ *
+ * The old version did `if (!items.length) { el.hidden = true; return; }`, so a
+ * broken feed looked exactly like `news=off`. Four states instead:
+ *
+ *   live       headlines, nothing extra said
+ *   degraded   headlines, and the quiet sources named
+ *   stale      last-good headlines, and the age of the data stated outright
+ *   down       nothing cached to fall back on, so SAY it is unavailable
+ *
+ * `down` deliberately draws a row rather than hiding the block. An empty bar
+ * reads as a design choice; two words read as a fault, and a fault is what it
+ * is. Only `news=off` may hide this.
+ */
+function paintNews(items, state, note){
   var el = document.getElementById('news');
   if (!el) return;
-  if (!items.length) { el.hidden = true; return; }
-  el.innerHTML = '<div class="src">' + esc(feedList().map(feedHost).join(' \u00b7 ')) + '</div>' +
-    items.map(function (it) {
-      return '<div class="item"><span class="age">' + esc(it.age) + '</span>' +
-             '<span class="head">' + esc(it.title) + '</span></div>';
-    }).join('');
+
+  var head = '<div class="src">' + esc(feedList().map(feedHost).join(' · ')) +
+             (note ? '<span class="flag">' + esc(note) + '</span>' : '') + '</div>';
+
+  if (!items || !items.length) {
+    el.className = 'bad';
+    el.innerHTML = head +
+      '<div class="item warn"><span class="age">—</span>' +
+      '<span class="head">Headlines unavailable</span></div>';
+    el.hidden = false;
+    return;
+  }
+
+  el.className = (state === 'stale' ? 'stale' : (state === 'degraded' ? 'degraded' : ''));
+  el.innerHTML = head + items.map(function (it) {
+    return '<div class="item"><span class="age">' + esc(it.age) + '</span>' +
+           '<span class="head">' + esc(it.title) + '</span></div>';
+  }).join('');
   el.hidden = false;
 }
 
-function pullOne(feed){
-  // No `count`, no `order_by`: those are paid parameters and the free endpoint
-  // answers 422 for them rather than ignoring them.
-  var url = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed);
-  return fetch(url, { cache: 'no-store' })
-    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-    .then(function (d) {
-      if (!d || d.status !== 'ok' || !d.items) return [];
-      return d.items.map(function (it) {
-        // rss2json normalises pubDate to UTC without saying so in the string,
-        // which Date parses as local time — hence the explicit Z.
-        return {
-          title: String(it.title || '').trim(),
-          at: Date.parse(String(it.pubDate).replace(' ', 'T') + 'Z')
-        };
-      }).filter(function (it) { return it.title && isFinite(it.at); });
-    })
-    // One source being down thins the list; it does not empty it.
-    .catch(function () { return []; });
+/** Shared by the live and cached paths, so a stale list keeps ageing on screen. */
+function renderNews(data, state, note){
+  paintNews((data.items || []).slice(0, newsCount()).map(function (it) {
+    return { title: it.title, age: ageLabel(it.at) };
+  }), state, note);
 }
 
+/** "quiet: watcher.guru" - names what is missing instead of silently thinning. */
+function quietNote(sources){
+  var dead = (sources || []).filter(function (s) { return !s.ok; })
+    .map(function (s) { return s.host; });
+  return dead.length ? 'quiet: ' + dead.join(', ') : '';
+}
+
+/* ONE REQUEST TO OUR OWN ROUTE, WHICH DOES THE READING.
+ *
+ * Was: one fetch per feed to api.rss2json.com, merged and de-duped here.
+ * Now: /api/news does the fetching, merging and de-duping server-side and
+ * answers with {ok, degraded, fetchedAt, sources[], items[]}. The feed list
+ * still comes from `newsfeed=` and is still capped - it is passed through, so
+ * pointing this at an esports feed works exactly as it did.
+ *
+ * The items carry link and summary now as well as title and date. Only the
+ * title and age are drawn, but the rest is there for whatever comes next.
+ */
 function pullNews(){
   var n = newsCount();
   if (!n || !C.chart) return Promise.resolve();
-  return Promise.all(feedList().map(pullOne)).then(function (lots) {
-    var seen = {}, all = [];
-    lots.forEach(function (list) {
-      list.forEach(function (it) {
-        var key = it.title.toLowerCase();
-        if (seen[key]) return;          // two outlets, one story
-        seen[key] = 1;
-        all.push(it);
-      });
+
+  var url = newsApi() + '?feeds=' + encodeURIComponent(feedList().join(','));
+
+  return fetch(url, { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)); })
+    .then(function (d) {
+      if (!d || !d.ok || !d.items || !d.items.length) throw new Error('no items');
+      newsCacheWrite({ items: d.items, fetchedAt: d.fetchedAt || Date.now() });
+      renderNews(d, d.degraded ? 'degraded' : 'live',
+                 d.degraded ? quietNote(d.sources) : '');
+    })
+    .catch(function () {
+      /* THIS IS THE BUG THAT WAS HERE. It used to `return []`, which painted
+       * nothing and hid the block, so months of outage looked intentional.
+       * Now: last good if there is one, clearly marked with its age, and an
+       * explicit unavailable row if there is not. Either way something is on
+       * screen that says the ticker is not current.
+       */
+      var cached = newsCacheRead();
+      if (!cached) { paintNews([], 'bad', 'feed unreachable'); return; }
+      var old = Date.now() - cached.fetchedAt;
+      renderNews(cached, old > NEWS_STALE_MS ? 'stale' : 'degraded',
+                 'stale ' + ageLabel(cached.fetchedAt));
     });
-    all.sort(function (a, b) { return b.at - a.at; });
-    paintNews(all.slice(0, n).map(function (it) {
-      return { title: it.title, age: ageLabel(it.at) };
-    }));
-  });
 }
 
 /* THE BITCOIN MARK, DRAWN RATHER THAN FETCHED.
